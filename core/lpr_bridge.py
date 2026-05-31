@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Frigate LPR -> Loxone bridge med GPT-4o fallback. Multi-kamera støtte."""
+"""OLPR – Frigate LPR bridge med GPT-4o fallback. Multi-kamera støtte."""
 import base64
 import json
 import logging
@@ -14,42 +14,62 @@ from datetime import datetime
 import paho.mqtt.client as mqtt
 import requests
 
+# ── Paths ─────────────────────────────────────────────────────────────────────
+BASE_DIR     = os.environ.get("OLPR_BASE",   "/opt/olpr/core")
+CONFIG_DIR   = os.environ.get("OLPR_CONFIG", "/opt/olpr/config")
+DATA_DIR     = os.environ.get("OLPR_DATA",   "/opt/olpr/data")
+SETTINGS_FILE = f"{CONFIG_DIR}/settings.json"
+SKILT_FILE    = f"{CONFIG_DIR}/kjente_skilt.json"
+SNAPSHOT_DIR  = f"{DATA_DIR}/snapshots"
+DB_FILE       = f"{DATA_DIR}/ukjente.db"
+LOGG_DB       = f"{DATA_DIR}/logg.db"
+FRIGATE_API   = "http://127.0.0.1:5000"
+
+# ── Defaults ──────────────────────────────────────────────────────────────────
 MQTT_HOST      = "127.0.0.1"
 MQTT_PORT      = 1883
-WAIT_SECONDS   = 10
+WAIT_SECONDS   = 30
 RESET_SECONDS  = 5
-PLATE_REGEX    = re.compile(r'[A-Z]{2}[0-9]{4,5}')
-LOG_FILE       = "/opt/homeserver/lpr_log.txt"
-SKILT_FILE     = "/opt/homeserver/kjente_skilt.json"
-SNAPSHOT_DIR   = "/opt/homeserver/lpr_ukjente/snapshots"
-DB_FILE        = "/opt/homeserver/lpr_ukjente/ukjente.db"
-FRIGATE_API    = "http://127.0.0.1:5000"
+COMMIT_WINDOW  = 1.5
+SNAPSHOT_DELAY = 1.0
+KONF_TERSKEL   = 0.8
+GPT_ENABLED    = False
+PRUNE_DAYS     = 30
 OPENAI_API_KEY = ""
 GPT_MODEL      = "gpt-4o"
+PLATE_REGEX    = re.compile(r'[A-Z]{2}[0-9]{4,5}')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-log = logging.getLogger("lpr")
+log = logging.getLogger("olpr")
 
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 def _load_settings():
     try:
-        with open("/opt/homeserver/settings.json") as f:
+        with open(SETTINGS_FILE) as f:
             return json.load(f).get('lpr', {})
     except Exception:
         return {}
 
-def _load_settings_full():
+def _load_full_settings():
     try:
-        with open("/opt/homeserver/settings.json") as f:
+        with open(SETTINGS_FILE) as f:
             return json.load(f)
     except Exception:
         return {}
 
+def _get_mqtt_topic(key, camera):
+    try:
+        topics = _load_full_settings().get('mqtt', {})
+    except Exception:
+        topics = {}
+    default = {"result_topic": "lpr/{camera}/resultat", "plate_topic": "lpr/{camera}/skilt"}
+    return topics.get(key, default[key]).replace("{camera}", camera)
+
 def load_lpr_cameras():
     try:
-        with open("/opt/homeserver/settings.json") as f:
+        with open(SETTINGS_FILE) as f:
             cameras = json.load(f).get('cameras', [])
         lpr_cams = [c['name'] for c in cameras if c.get('lpr')]
         return lpr_cams if lpr_cams else ['oppkjorsel']
@@ -57,17 +77,17 @@ def load_lpr_cameras():
         return ['oppkjorsel']
 
 _s             = _load_settings()
-WAIT_SECONDS   = _s.get('wait_seconds', WAIT_SECONDS)
-RESET_SECONDS  = _s.get('reset_seconds', RESET_SECONDS)
-COMMIT_WINDOW  = _s.get('commit_window', 1.5)
-SNAPSHOT_DELAY = _s.get('snapshot_delay', 1.0)
-KONF_TERSKEL   = _s.get('confidence_threshold', 0.8)
-GPT_ENABLED    = _s.get('gpt_enabled', True)
-PRUNE_DAYS     = _s.get('snapshot_retention_days', 30)
-OPENAI_API_KEY = _s.get('openai_api_key', OPENAI_API_KEY)
-GPT_MODEL      = _s.get('gpt_model', GPT_MODEL)
-MQTT_HOST      = _s.get('mqtt_host', MQTT_HOST)
-MQTT_PORT      = int(_s.get('mqtt_port', MQTT_PORT))
+WAIT_SECONDS   = _s.get('wait_seconds',          WAIT_SECONDS)
+RESET_SECONDS  = _s.get('reset_seconds',          RESET_SECONDS)
+COMMIT_WINDOW  = _s.get('commit_window',          COMMIT_WINDOW)
+SNAPSHOT_DELAY = _s.get('snapshot_delay',         SNAPSHOT_DELAY)
+KONF_TERSKEL   = _s.get('confidence_threshold',   KONF_TERSKEL)
+GPT_ENABLED    = _s.get('gpt_enabled',            GPT_ENABLED)
+PRUNE_DAYS     = _s.get('snapshot_retention_days', PRUNE_DAYS)
+OPENAI_API_KEY = _s.get('openai_api_key',         OPENAI_API_KEY)
+GPT_MODEL      = _s.get('gpt_model',              GPT_MODEL)
+MQTT_HOST      = _s.get('mqtt_host',              MQTT_HOST)
+MQTT_PORT      = int(_s.get('mqtt_port',          MQTT_PORT))
 LPR_CAMERAS    = load_lpr_cameras()
 
 
@@ -82,13 +102,13 @@ cam_lpr_collection   = {c: {} for c in LPR_CAMERAS}
 cam_lpr_frames       = {c: {} for c in LPR_CAMERAS}
 cam_event_frames     = {c: {} for c in LPR_CAMERAS}
 cam_snapshot_cache   = {c: {} for c in LPR_CAMERAS}
-_last_resultat       = {}  # camera -> (value, timestamp)
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
 
 def init_db():
     os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    os.makedirs(DATA_DIR, exist_ok=True)
     conn = sqlite3.connect(DB_FILE)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS ukjente (
@@ -97,17 +117,37 @@ def init_db():
             plate     TEXT NOT NULL,
             event_id  TEXT,
             snapshot  TEXT,
-            kilde     TEXT
+            kilde     TEXT,
+            frigate_plate TEXT,
+            camera    TEXT
         )
     """)
-    for col in ['kilde', 'frigate_plate', 'camera']:
-        try:
-            conn.execute(f"ALTER TABLE ukjente ADD COLUMN {col} TEXT")
-        except sqlite3.OperationalError:
-            pass
     conn.commit()
     conn.close()
-    log.info("Database klar")
+
+    conn2 = sqlite3.connect(LOGG_DB)
+    conn2.execute("""
+        CREATE TABLE IF NOT EXISTS logg (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            tidspunkt TEXT NOT NULL,
+            plate     TEXT NOT NULL,
+            camera    TEXT
+        )
+    """)
+    conn2.commit()
+    conn2.close()
+    log.info("Databaser klare")
+
+
+def logg_til_db(tidspunkt, plate, camera):
+    try:
+        conn = sqlite3.connect(LOGG_DB)
+        conn.execute("INSERT INTO logg (tidspunkt, plate, camera) VALUES (?, ?, ?)",
+                     (tidspunkt, plate, camera))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        log.warning(f"Logg-skriving feilet: {e}")
 
 
 def lagre_i_db(plate, event_id, tidspunkt, snapshot_path, kilde, frigate_plate=None, camera=None):
@@ -151,26 +191,12 @@ def prefetch_snapshot(event_id, camera):
     if path:
         with cache_lock:
             cam_snapshot_cache[camera][event_id] = path
-        log.info(f"Snapshot cached for event {event_id}")
     else:
         log.warning(f"Prefetch feilet for event {event_id}")
 
 
 # ── GPT-4o Vision ─────────────────────────────────────────────────────────────
 
-LOGG_DB = "/opt/homeserver/lpr_ukjente/logg.db"
-
-def logg_til_db(tidspunkt, plate, camera):
-    try:
-        conn = sqlite3.connect(LOGG_DB)
-        conn.execute(
-            "INSERT INTO logg (tidspunkt, plate, camera) VALUES (?, ?, ?)",
-            (tidspunkt, plate, camera)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        log.warning(f"Logg-skriving feilet: {e}")
 def gpt_les_skilt(snapshot_path):
     try:
         with open(snapshot_path, 'rb') as f:
@@ -183,10 +209,8 @@ def gpt_les_skilt(snapshot_path):
                 {"type": "image_url", "image_url": {
                     "url": f"data:image/jpeg;base64,{bilde_b64}", "detail": "high"}},
                 {"type": "text", "text": (
-                    "Read the Norwegian license plate visible in this image. "
-                    "Norwegian plates have 2 capital letters followed by 4 or 5 digits "
-                    "(e.g. AB12345 for cars, AB1234 for motorcycles). "
-                    "Examine the image carefully and reply with ONLY the plate number."
+                    "Read the license plate visible in this image. "
+                    "Reply with ONLY the plate number, nothing else."
                 )}
             ]}]
         }
@@ -205,12 +229,9 @@ def gpt_les_skilt(snapshot_path):
     return None
 
 
-
-
 def camera_gpt_enabled(camera):
-    """Per-kamera gpt_enabled. Faller tilbake til global GPT_ENABLED."""
     try:
-        with open("/opt/homeserver/settings.json") as f:
+        with open(SETTINGS_FILE) as f:
             d = json.load(f)
         cam = next((c for c in d.get('cameras', []) if c['name'] == camera), None)
         if cam and 'gpt_enabled' in cam:
@@ -221,9 +242,8 @@ def camera_gpt_enabled(camera):
 
 
 def camera_gpt_verify(camera):
-    """Per-kamera gpt_verify – alltid kjør GPT i tillegg til Frigate."""
     try:
-        with open("/opt/homeserver/settings.json") as f:
+        with open(SETTINGS_FILE) as f:
             cameras = json.load(f).get('cameras', [])
         cam = next((c for c in cameras if c['name'] == camera), None)
         return bool(cam.get('gpt_verify', False)) if cam else False
@@ -234,8 +254,7 @@ def camera_gpt_verify(camera):
 def gpt_fallback(client, event_id, camera, frigate_plate=None):
     er_verifisering = frigate_plate is not None
     tidspunkt = now()
-    log.info(f"GPT-{'verifisering' if er_verifisering else 'fallback'} for {event_id} ({camera})"
-             + (f" (Frigate: {frigate_plate})" if er_verifisering else ""))
+    log.info(f"GPT-{'verifisering' if er_verifisering else 'fallback'} for {event_id} ({camera})")
 
     snapshot_path = hent_snapshot(event_id, tidspunkt, prefiks="gpt")
     if not snapshot_path:
@@ -246,7 +265,6 @@ def gpt_fallback(client, event_id, camera, frigate_plate=None):
                 snapshot_path = os.path.join(SNAPSHOT_DIR, f"{ts2}_gpt.jpg")
                 with open(snapshot_path, 'wb') as f:
                     f.write(_r2.content)
-                log.info(f"GPT live frame lagret: {snapshot_path}")
             else:
                 snapshot_path = None
         except Exception:
@@ -258,69 +276,42 @@ def gpt_fallback(client, event_id, camera, frigate_plate=None):
     plate = gpt_les_skilt(snapshot_path) if snapshot_path else None
 
     if plate:
-        log.info(f"GPT leste skilt: {plate}")
         kilde = "gpt_verifisert" if er_verifisering else "gpt_fallback"
         logg_til_db(tidspunkt, plate, camera)
         kjente = load_kjente_skilt()
         navn = kjente.get(plate, "ukjent")
-        client.publish(f"loxone/{camera}/skilt", plate, retain=True)
-        client.publish(f"loxone/{camera}/resultat", navn, qos=1, retain=True)
+        client.publish(_get_mqtt_topic('plate_topic', camera), plate, retain=True)
+        client.publish(_get_mqtt_topic('result_topic', camera), navn, qos=1, retain=True)
         schedule_reset(client, camera)
         lagre_i_db(plate, event_id, tidspunkt, snapshot_path, kilde=kilde, camera=camera)
     else:
         if er_verifisering:
-            log.info(f"GPT feilet, bruker Frigate sin lesing: {frigate_plate}")
             kjente = load_kjente_skilt()
             navn = kjente.get(frigate_plate, "ukjent")
             logg_til_db(tidspunkt, frigate_plate, camera)
-            client.publish(f"loxone/{camera}/skilt", frigate_plate, retain=True)
-            client.publish(f"loxone/{camera}/resultat", navn, qos=1, retain=True)
+            client.publish(_get_mqtt_topic('plate_topic', camera), frigate_plate, retain=True)
+            client.publish(_get_mqtt_topic('result_topic', camera), navn, qos=1, retain=True)
             schedule_reset(client, camera)
             lagre_i_db(frigate_plate, event_id, tidspunkt, snapshot_path,
-                        kilde="frigate_gpt_feilet", camera=camera)
+                       kilde="frigate_gpt_feilet", camera=camera)
         else:
             log.info("GPT kunne ikke lese skilt, publiserer 'ukjent'")
-            threading.Thread(target=send_tts, args=("Ukjent i oppkjørselen",), daemon=True).start()
             logg_til_db(tidspunkt, 'ukjent', camera)
-            client.publish(f"loxone/{camera}/resultat", "ukjent", qos=1, retain=True)
+            client.publish(_get_mqtt_topic('result_topic', camera), "ukjent", qos=1, retain=True)
             schedule_reset(client, camera)
             lagre_i_db("ukjent", event_id, tidspunkt, snapshot_path,
-                        kilde="ukjent", frigate_plate=frigate_plate, camera=camera)
+                       kilde="ukjent", frigate_plate=frigate_plate, camera=camera)
 
 
 # ── Hjelpefunksjoner ──────────────────────────────────────────────────────────
 
-
-
 def schedule_reset(client, camera):
     def reset():
-        client.publish(f"loxone/{camera}/resultat", "", qos=0, retain=False)
+        client.publish(_get_mqtt_topic('result_topic', camera), "", qos=0, retain=False)
         log.info(f"Resultat-topic blanket ({camera})")
     t = threading.Timer(RESET_SECONDS, reset)
     t.daemon = True
     t.start()
-
-
-def send_tts(tekst):
-    try:
-        s = _load_settings_full()
-        tts = s.get('dashboard', {}).get('tts', {})
-        if not tts.get('enabled', False):
-            return
-        ip   = tts.get('loxone_ip', '192.168.1.100')
-        user = tts.get('loxone_user', '')
-        pwd  = tts.get('loxone_pass', '')
-        zones = []
-        if tts.get('gang', False):
-            zones.append(tts.get('gang_input', 'TTS LPR Gang'))
-        if tts.get('stue', False):
-            zones.append(tts.get('stue_input', 'TTS LPR Stue'))
-        for zone in zones:
-            url = f"http://{user}:{pwd}@{ip}/dev/sps/io/{requests.utils.quote(zone)}/{requests.utils.quote(tekst)}"
-            r = requests.get(url, timeout=5)
-            log.info(f"TTS '{tekst}' → {zone} (HTTP {r.status_code})")
-    except Exception as e:
-        log.warning(f"TTS feilet: {e}")
 
 
 def _behandle_plate(client, plate, eid, camera, preframe=None):
@@ -337,10 +328,9 @@ def _behandle_plate(client, plate, eid, camera, preframe=None):
     kjente = load_kjente_skilt()
     navn = kjente.get(plate, "ukjent")
     log.info(f"Publiserer som: {navn}")
-    client.publish(f"loxone/{camera}/skilt", plate, retain=True)
-    client.publish(f"loxone/{camera}/resultat", navn, qos=1, retain=True)
+    client.publish(_get_mqtt_topic('plate_topic', camera), plate, retain=True)
+    client.publish(_get_mqtt_topic('result_topic', camera), navn, qos=1, retain=True)
     schedule_reset(client, camera)
-    threading.Thread(target=send_tts, args=(f"{navn} i oppkjørselen",), daemon=True).start()
 
     if camera_gpt_verify(camera):
         def _gpt_verify(event_id=eid, cam=camera, frigate_plate=plate):
@@ -348,24 +338,18 @@ def _behandle_plate(client, plate, eid, camera, preframe=None):
             _t.sleep(3)
             snap = hent_snapshot(event_id, now(), prefiks="verify")
             if not snap:
-                log.info(f"GPT verify: ingen snapshot ({cam})")
                 return
             gpt_result = gpt_les_skilt(snap)
-            import sqlite3 as _sq
             try:
-                with _sq.connect('/opt/homeserver/lpr_ukjente/ukjente.db') as _conn:
+                with sqlite3.connect(DB_FILE) as _conn:
                     row = _conn.execute("SELECT kilde FROM ukjente WHERE event_id = ?", (event_id,)).fetchone()
                     if row:
                         if gpt_result and gpt_result != frigate_plate:
-                            log.warning(f"GPT verify UENIG: Frigate={frigate_plate}, GPT={gpt_result} ({cam})")
                             _conn.execute("UPDATE ukjente SET kilde = ? WHERE event_id = ?",
                                          (row[0] + '_gpt_uenig', event_id))
                         elif gpt_result:
-                            log.info(f"GPT verify ENIG: {frigate_plate} ✅ ({cam})")
                             _conn.execute("UPDATE ukjente SET kilde = ? WHERE event_id = ?",
                                          (row[0] + '_gpt_enig', event_id))
-                        else:
-                            log.info(f"GPT verify: kunne ikke lese ({cam})")
             except Exception as _e:
                 log.warning(f"GPT verify DB-oppdatering feilet: {_e}")
         threading.Thread(target=_gpt_verify, daemon=True).start()
@@ -377,12 +361,10 @@ def _behandle_plate(client, plate, eid, camera, preframe=None):
             with open(fp, 'wb') as f:
                 f.write(live_frame)
             path = fp
-            log.info(f"Live frame lagret: {fp}")
         else:
             path = hent_snapshot(eid, tidspunkt, prefiks=plate)
         kilde = "frigate" if navn == "ukjent" else "kjent"
         lagre_i_db(plate, eid, tidspunkt, path, kilde=kilde, camera=camera)
-
     threading.Thread(target=lagre, daemon=True).start()
 
 
@@ -459,7 +441,6 @@ def on_event_new(client, event_id, label, camera):
                 if _fr.status_code == 200 and len(_fr.content) > 1000:
                     cam_event_frames.setdefault(camera, {})[event_id] = _fr.content
                     cam_lpr_frames.setdefault(camera, {})[event_id]   = _fr.content
-                    log.info(f"Delayed frame captured for {event_id} ({camera})")
                 else:
                     log.warning(f"Delayed frame feilet: HTTP {_fr.status_code}")
             except Exception as e:
@@ -475,7 +456,7 @@ def on_event_end(client, event_id, camera):
         cam_lpr_collection.get(camera, {}).pop(event_id, None)
         cam_lpr_frames.get(camera, {}).pop(event_id, None)
         cam_event_frames.get(camera, {}).pop(event_id, None)
-    client.publish(f"loxone/{camera}/skilt", "", retain=True)
+    client.publish(_get_mqtt_topic('plate_topic', camera), "", retain=True)
     with state_lock:
         still_pending = (cam_pending_event_id.get(camera) == event_id)
     if still_pending:
@@ -514,9 +495,6 @@ def on_lpr(client, plate_raw, camera):
             _fr = requests.get(f"http://127.0.0.1:1984/api/frame.jpeg?src={camera}", timeout=2)
             if _fr.status_code == 200 and len(_fr.content) > 1000:
                 cam_lpr_frames.setdefault(camera, {})[eid] = _fr.content
-                log.info(f"LPR første-stemme frame captured for {eid} ({camera})")
-            else:
-                log.warning(f"Første-stemme frame feilet: HTTP {_fr.status_code}")
         except Exception as e:
             log.warning(f"Første-stemme frame exception: {e}")
 
@@ -525,7 +503,6 @@ def on_lpr(client, plate_raw, camera):
             col = cam_lpr_collection.get(camera, {}).pop(eid, None)
             if not col or not col['votes']:
                 return
-            # Prioriter 5-sifrede skilt over 4-sifrede (4-siffer er MC, sjelden)
             fem_sifret = [v for v in col['votes'] if len(v) == 7]
             if fem_sifret:
                 vinner = max(set(fem_sifret), key=fem_sifret.count)
@@ -586,7 +563,7 @@ def on_connect(client, userdata, flags, rc, *args):
     client.subscribe("frigate/events")
     client.subscribe("frigate/tracked_object_update")
     for camera in LPR_CAMERAS:
-        client.publish(f"loxone/{camera}/skilt", "", retain=True)
+        client.publish(_get_mqtt_topic('plate_topic', camera), "", retain=True)
     log.info(f"LPR aktiv på kameraer: {LPR_CAMERAS}")
 
 
@@ -595,9 +572,9 @@ def main():
     prune_snapshots()
     threading.Thread(target=prune_snapshots_worker, daemon=True).start()
     try:
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="lpr_bridge_v2")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="olpr_bridge")
     except AttributeError:
-        client = mqtt.Client(client_id="lpr_bridge_v2")
+        client = mqtt.Client(client_id="olpr_bridge")
     client.on_connect = on_connect
     client.on_message = on_message
     client.connect(MQTT_HOST, MQTT_PORT, 60)
