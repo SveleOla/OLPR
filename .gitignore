@@ -1,0 +1,15 @@
+# Sensitiv konfig
+config/settings.json
+config/kjente_skilt.json
+
+# Databaser
+*.db
+*.db-shm
+*.db-wal
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Frigate
+core/frigate/storage/

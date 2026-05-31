@@ -1,0 +1,10 @@
+[Unit]
+Description=LPR Web – Skiltlogg
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/homeserver/lpr_web.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

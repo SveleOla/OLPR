@@ -1,0 +1,40 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./core/mosquitto/config:/mosquitto/config
+
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    volumes:
+      - ./core/frigate:/config
+      - /etc/localtime:/etc/localtime:ro
+      - ./frigate/storage:/media/frigate
+      - /dev/bus/usb:/dev/bus/usb
+    shm_size: '512mb'
+
+  homebridge:
+    image: homebridge/homebridge:latest
+    container_name: homebridge
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./homebridge:/homebridge
+    environment:
+      - TZ=Europe/Oslo
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./portainer/data:/data
+      - /var/run/docker.sock:/var/run/docker.sock

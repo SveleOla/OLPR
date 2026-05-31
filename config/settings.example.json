@@ -1,0 +1,31 @@
+{
+  "lpr": {
+    "confidence_threshold": 0.8,
+    "gpt_enabled": false,
+    "gpt_model": "gpt-4o",
+    "openai_api_key": "",
+    "wait_seconds": 30,
+    "reset_seconds": 5,
+    "commit_window": 1.5,
+    "snapshot_delay": 1,
+    "snapshot_retention_days": 30,
+    "mqtt_host": "127.0.0.1",
+    "mqtt_port": 1883
+  },
+  "mqtt": {
+    "result_topic": "lpr/{camera}/resultat",
+    "plate_topic": "lpr/{camera}/skilt"
+  },
+  "web": {
+    "max_log_lines": 2000,
+    "stats_refresh_sec": 15,
+    "storm_refresh_sec": 3
+  },
+  "system": {
+    "name": "OLPR",
+    "frigate_url": "http://localhost:5000",
+    "portainer_url": "http://localhost:9000",
+    "pihole_url": "http://localhost/admin"
+  },
+  "cameras": []
+}

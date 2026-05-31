@@ -1,0 +1,13 @@
+[Unit]
+Description=Frigate LPR -> Loxone MQTT Bridge
+After=docker.service mosquitto.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/homeserver/lpr_bridge.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
