@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Villa Larsnes – Hjemmeserver dashboard."""
+"""OLPR – LPR Dashboard."""
 import csv
 import logging
 import sqlite3
 import subprocess
 import time
 import urllib.request
-import gzip
 import html
 import json
 import mimetypes
@@ -18,55 +17,46 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
-log = logging.getLogger('lpr-web')
+log = logging.getLogger('olpr-web')
 
-BASE        = "/opt/homeserver"
-LOG_FILE    = f"{BASE}/lpr_log.txt"
-SKILT_FILE  = f"{BASE}/kjente_skilt.json"
-WEATHER_LOG = f"{BASE}/weather_log.csv"
-LUDVIG_LOG  = f"{BASE}/ludvig_log.csv"
-STORM_FILE  = f"{BASE}/storm_state.txt"
-STATIC_DIR  = f"{BASE}/static"
-TEMPLATE    = f"{BASE}/templates/index.html"
-MAX_LINES        = 2000
-UKJENTE_DB       = "/opt/homeserver/lpr_ukjente/ukjente.db"
-UKJENTE_SNAPSHOTS = "/opt/homeserver/lpr_ukjente/snapshots"
+BASE_DIR          = os.environ.get("OLPR_BASE",   "/opt/olpr/core")
+CONFIG_DIR        = os.environ.get("OLPR_CONFIG", "/opt/olpr/config")
+DATA_DIR          = os.environ.get("OLPR_DATA",   "/opt/olpr/data")
+SKILT_FILE        = f"{CONFIG_DIR}/kjente_skilt.json"
+STATIC_DIR        = f"{BASE_DIR}/static"
+TEMPLATE          = f"{BASE_DIR}/templates/index.html"
+SETTINGS_FILE     = f"{CONFIG_DIR}/settings.json"
+UKJENTE_DB        = f"{DATA_DIR}/ukjente.db"
+UKJENTE_SNAPSHOTS = f"{DATA_DIR}/snapshots"
+LOGG_DB           = f"{DATA_DIR}/logg.db"
+MAX_LINES         = 2000
 
-
-SETTINGS_FILE    = f"{BASE}/settings.json"
 SETTINGS_DEFAULTS = {
-    "lpr":    {"confidence_threshold": 0.8, "gpt_enabled": True, "wait_seconds": 10,
-               "reset_seconds": 5, "commit_window": 1.5, "snapshot_delay": 1.0, "snapshot_retention_days": 30},
-    "ludvig": {"trigger_count": 3, "trigger_window_sec": 600, "cooldown_sec": 1200, "retain_days": 90},
-    "web":    {"max_log_lines": 2000, "stats_refresh_sec": 15, "storm_refresh_sec": 3},
-    "system": {"name": "Villalarsnes", "frigate_url": "https://villaserver:8971", "portainer_url": "http://villaserver:9000", "pihole_url": "http://villaserver/admin"},
-    "dashboard": {"tts": {"enabled": False, "gang": True, "stue": False, "volume": 20,
-                          "loxone_ip": "192.168.1.100", "loxone_user": "voicebridge",
-                          "loxone_pass": "Villa-larsnes", "gang_input": "TTS LPR Gang",
-                          "stue_input": "TTS LPR Stue"}},
+    "lpr":    {"confidence_threshold": 0.8, "gpt_enabled": False, "wait_seconds": 30,
+               "reset_seconds": 5, "commit_window": 1.5, "snapshot_delay": 1.0,
+               "snapshot_retention_days": 30},
+    "web":    {"max_log_lines": 2000, "stats_refresh_sec": 15},
+    "system": {"name": "OLPR", "frigate_url": "http://localhost:5000",
+               "portainer_url": "http://localhost:9000"},
+    "mqtt":   {"result_topic": "lpr/{camera}/resultat",
+               "plate_topic":  "lpr/{camera}/skilt"},
 }
 
 def load_settings():
     try:
         with open(SETTINGS_FILE) as f:
             saved = json.load(f)
-        result = {k: (dict(v) if not any(isinstance(vv, dict) for vv in v.values()) else {kk: dict(vv) if isinstance(vv, dict) else vv for kk, vv in v.items()}) for k, v in SETTINGS_DEFAULTS.items()}
+        result = {k: dict(v) for k, v in SETTINGS_DEFAULTS.items()}
         for section, values in saved.items():
-            if section in result:
-                if isinstance(values, dict):
-                    for k, v in values.items():
-                        if v is None:
-                            continue
-                        if isinstance(v, dict) and isinstance(result[section].get(k), dict):
-                            result[section][k].update(v)
-                        else:
-                            result[section][k] = v
+            if section in result and isinstance(values, dict):
+                for k, v in values.items():
+                    if v is not None:
+                        result[section][k] = v
         return result
     except Exception:
         return {k: dict(v) for k, v in SETTINGS_DEFAULTS.items()}
 
 def save_settings_file(data):
-    # Filtrer ut None-verdier før lagring
     def filter_none(obj):
         if isinstance(obj, dict):
             return {k: filter_none(v) for k, v in obj.items() if v is not None}
@@ -81,44 +71,6 @@ def restart_service(name):
     except Exception:
         return False
 
-
-
-def sync_frigate_snapshots(cameras):
-    """Aktiver/deaktiver Frigate snapshots basert på LPR-status per kamera."""
-    try:
-        config_path = "/opt/homeserver/frigate/config.yml"
-        with open(config_path) as f:
-            config = f.read()
-
-        for cam in cameras:
-            name = cam['name']
-            lpr  = cam.get('lpr', False)
-            snap_block = f"""  {name}:
-    snapshots:
-      enabled: true
-      retain:
-        default: 30
-    ffmpeg:"""
-            no_snap_block = f"""  {name}:
-    ffmpeg:"""
-
-            has_snapshots = f"  {name}:" in config and "snapshots:" in config.split(f"  {name}:")[1].split("\n  ")[0]
-            if lpr and not has_snapshots:
-                # Legg til snapshots før ffmpeg
-                config = config.replace(f"  {name}:\n    ffmpeg:", snap_block)
-                log.info(f"Frigate snapshots aktivert for {name}")
-            elif not lpr and has_snapshots:
-                # Fjern snapshots uansett posisjon
-                config = config.replace(snap_block, no_snap_block)
-                log.info(f"Frigate snapshots deaktivert for {name}")
-
-        with open(config_path, 'w') as f:
-            f.write(config)
-        return True
-    except Exception as e:
-        log.warning(f"sync_frigate_snapshots feilet: {e}")
-        return False
-
 def load_template(replacements):
     with open(TEMPLATE, encoding='utf-8') as f:
         tpl = f.read()
@@ -126,18 +78,111 @@ def load_template(replacements):
         tpl = tpl.replace(key, val)
     return tpl
 
+def load_skilt():
+    try:
+        with open(SKILT_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_skilt(data):
+    with open(SKILT_FILE, 'w') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+def load_all_lines():
+    try:
+        conn = sqlite3.connect(LOGG_DB)
+        rows = conn.execute("SELECT tidspunkt, plate, camera FROM logg ORDER BY id ASC").fetchall()
+        conn.close()
+        return [f"{r[0]} {r[1]} {r[2] or ''}\n" for r in rows]
+    except Exception:
+        return []
+
+def load_today_lines():
+    try:
+        conn = sqlite3.connect(LOGG_DB)
+        today = datetime.now().strftime('%Y-%m-%d')
+        rows = conn.execute(
+            "SELECT tidspunkt, plate, camera FROM logg WHERE tidspunkt LIKE ? ORDER BY id ASC",
+            (f"{today}%",)
+        ).fetchall()
+        conn.close()
+        return [f"{r[0]} {r[1]} {r[2] or ''}\n" for r in rows]
+    except Exception:
+        return []
+
+def load_logg_entries(all_=False):
+    try:
+        skilt = load_skilt()
+        conn_logg = sqlite3.connect(LOGG_DB)
+        conn_logg.row_factory = sqlite3.Row
+        if all_:
+            rows = conn_logg.execute(
+                "SELECT id, tidspunkt, plate, camera FROM logg ORDER BY id DESC"
+            ).fetchall()
+        else:
+            today = datetime.now().strftime('%Y-%m-%d')
+            rows = conn_logg.execute(
+                "SELECT id, tidspunkt, plate, camera FROM logg WHERE tidspunkt LIKE ? ORDER BY id DESC",
+                (f"{today}%",)
+            ).fetchall()
+        conn_logg.close()
+
+        conn_ukjente = sqlite3.connect(UKJENTE_DB)
+        conn_ukjente.row_factory = sqlite3.Row
+        ukjente_rows = conn_ukjente.execute(
+            "SELECT tidspunkt, plate, snapshot, kilde, frigate_plate FROM ukjente"
+        ).fetchall()
+        conn_ukjente.close()
+
+        ukjente_map = {}
+        for u in ukjente_rows:
+            key = (u['plate'], u['tidspunkt'][:16])
+            ukjente_map[key] = u
+
+        result = []
+        for r in rows:
+            plate = r['plate']
+            key   = (plate, r['tidspunkt'][:16])
+            u     = ukjente_map.get(key)
+            snapshot = kilde = frigate_plate = None
+            if u and u['snapshot']:
+                snapshot      = '/snapshot/' + os.path.basename(u['snapshot'])
+                kilde         = u['kilde']
+                frigate_plate = u['frigate_plate']
+            result.append({
+                'tidspunkt':     r['tidspunkt'],
+                'dato':          r['tidspunkt'][:10],
+                'tid':           r['tidspunkt'][11:16],
+                'plate':         plate,
+                'camera':        r['camera'] or '',
+                'navn':          skilt.get(plate, ''),
+                'snapshot':      snapshot,
+                'kilde':         kilde,
+                'frigate_plate': frigate_plate,
+                'linje':         f"{r['tidspunkt']} {plate}",
+            })
+        return result
+    except Exception as e:
+        log.warning(f"load_logg_entries feilet: {e}")
+        return []
 
 def load_ukjente(all_=False):
     try:
         conn = sqlite3.connect(UKJENTE_DB)
         conn.row_factory = sqlite3.Row
         if all_:
-            query = "SELECT id, tidspunkt, plate, snapshot, kilde, frigate_plate, camera FROM ukjente WHERE kilde NOT LIKE 'kjent%' ORDER BY id DESC"
-            rows = conn.execute(query).fetchall()
+            rows = conn.execute(
+                "SELECT id, tidspunkt, plate, snapshot, kilde, frigate_plate, camera "
+                "FROM ukjente WHERE kilde NOT LIKE 'kjent%' ORDER BY id DESC"
+            ).fetchall()
         else:
             today = datetime.now().strftime('%Y-%m-%d')
-            query = "SELECT id, tidspunkt, plate, snapshot, kilde, frigate_plate, camera FROM ukjente WHERE kilde NOT LIKE 'kjent%' AND tidspunkt LIKE ? ORDER BY id DESC"
-            rows = conn.execute(query, (f"{today}%",)).fetchall()
+            rows = conn.execute(
+                "SELECT id, tidspunkt, plate, snapshot, kilde, frigate_plate, camera "
+                "FROM ukjente WHERE kilde NOT LIKE 'kjent%' AND tidspunkt LIKE ? ORDER BY id DESC",
+                (f"{today}%",)
+            ).fetchall()
         conn.close()
         result = []
         for r in rows:
@@ -155,7 +200,6 @@ def load_ukjente(all_=False):
         return result
     except Exception:
         return []
-
 
 def load_events_24h(all_=False):
     skilt = load_skilt()
@@ -182,17 +226,17 @@ def load_events_24h(all_=False):
     events.sort(key=lambda e: e.get('start_time', 0), reverse=True)
     ukjente_by_event = {}
     local_snapshots  = {}
+    ukjente_kilde    = {}
+    ukjente_frigate  = {}
+    ukjente_camera   = {}
     try:
         conn = sqlite3.connect(UKJENTE_DB)
         conn.row_factory = sqlite3.Row
-        ukjente_kilde = {}
-        ukjente_frigate = {}
-        ukjente_camera = {}
         for row in conn.execute("SELECT event_id, plate, snapshot, kilde, frigate_plate, camera FROM ukjente WHERE event_id IS NOT NULL"):
             ukjente_by_event[row['event_id']] = row['plate']
             ukjente_kilde[row['event_id']]    = row['kilde']
-            ukjente_frigate[row['event_id']] = row['frigate_plate']
-            ukjente_camera[row['event_id']]  = row['camera']
+            ukjente_frigate[row['event_id']]  = row['frigate_plate']
+            ukjente_camera[row['event_id']]   = row['camera']
             if row['snapshot']:
                 local_snapshots[row['event_id']] = '/snapshot/' + os.path.basename(row['snapshot'])
         conn.close()
@@ -202,7 +246,8 @@ def load_events_24h(all_=False):
     try:
         conn = sqlite3.connect(LOGG_DB)
         cutoff_str = (datetime.now() - timedelta(hours=25)).strftime('%Y-%m-%d %H:%M:%S')
-        rows = conn.execute("SELECT tidspunkt, plate FROM logg WHERE tidspunkt > ? ORDER BY id ASC", (cutoff_str,)).fetchall()
+        rows = conn.execute("SELECT tidspunkt, plate FROM logg WHERE tidspunkt > ? ORDER BY id ASC",
+                            (cutoff_str,)).fetchall()
         conn.close()
         for r in rows:
             try:
@@ -244,15 +289,8 @@ def load_events_24h(all_=False):
         })
     return result
 
-
 def load_statistikk():
-    skilt  = load_skilt()
-    try:
-        with open('/opt/homeserver/hjemme_skilt.json') as f:
-            hjemme = set(json.load(f))
-    except Exception:
-        hjemme = set()
-
+    skilt   = load_skilt()
     lines   = load_all_lines()
     entries = []
     for line in lines:
@@ -277,24 +315,23 @@ def load_statistikk():
 
     ukjente_count = sum(1 for e in entries if e['plate'] == 'ukjent' or e['plate'] not in skilt)
 
-    # Kun kjente besøkende (ikke hjemmebiler, ikke ukjente)
     vehicle_stats = []
     for plate, visits in vehicle_visits.items():
-        if plate == 'ukjent' or plate not in skilt or plate in hjemme:
+        if plate == 'ukjent' or plate not in skilt:
             continue
-        vs   = sorted(visits)
-        navn = skilt.get(plate, '')
+        vs    = sorted(visits)
+        navn  = skilt.get(plate, '')
         avg_days = round((vs[-1] - vs[0]).days / (len(vs) - 1), 1) if len(vs) > 1 and (vs[-1] - vs[0]).days > 0 else None
-        hours     = [v.hour for v in vs]
+        hours    = [v.hour for v in vs]
         top_hours = [h for h, _ in Counter(hours).most_common(2)]
         vehicle_stats.append({
-            'plate':      plate,
-            'navn':       navn,
-            'count':      len(vs),
-            'first':      vs[0].strftime('%Y-%m-%d %H:%M'),
-            'last':       vs[-1].strftime('%Y-%m-%d %H:%M'),
-            'avg_days':   avg_days,
-            'top_hours':  top_hours,
+            'plate':     plate,
+            'navn':      navn,
+            'count':     len(vs),
+            'first':     vs[0].strftime('%Y-%m-%d %H:%M'),
+            'last':      vs[-1].strftime('%Y-%m-%d %H:%M'),
+            'avg_days':  avg_days,
+            'top_hours': top_hours,
         })
     vehicle_stats.sort(key=lambda x: x['count'], reverse=True)
 
@@ -302,8 +339,6 @@ def load_statistikk():
     weekday_cnt = defaultdict(int)
     hour_cnt    = defaultdict(int)
     for e in entries:
-        if e['plate'] in hjemme:
-            continue
         day_visits[e['ts'].date()].add(e['plate'])
         weekday_cnt[e['ts'].weekday()] += 1
         hour_cnt[e['ts'].hour] += 1
@@ -315,149 +350,22 @@ def load_statistikk():
         daily.append({
             'label':  d.strftime('%-d. %b'),
             'unique': len(day_visits.get(d, set())),
-            'total':  sum(1 for e in entries if e['ts'].date() == d and e['plate'] not in hjemme),
+            'total':  sum(1 for e in entries if e['ts'].date() == d),
         })
 
     dager = ['Man','Tir','Ons','Tor','Fre','Lør','Søn']
 
-    hjemme_stats = []
-    for plate in sorted(hjemme):
-        if plate not in vehicle_visits:
-            continue
-        vs   = sorted(vehicle_visits[plate])
-        navn = skilt.get(plate, plate)
-        avg  = round((vs[-1] - vs[0]).days / (len(vs) - 1), 1) if len(vs) > 1 and (vs[-1] - vs[0]).days > 0 else None
-        hrs  = [v.hour for v in vs]
-        top_hours = [h for h, _ in Counter(hrs).most_common(2)]
-        hjemme_stats.append({
-            'plate':     plate,
-            'navn':      navn,
-            'count':     len(vs),
-            'avg_days':  avg,
-            'top_hours': top_hours,
-            'last':      vs[-1].strftime('%Y-%m-%d %H:%M'),
-        })
-
     return {
         'total':         len(entries),
-        'unike':         len([p for p in vehicle_visits if p not in hjemme and p != 'ukjent']),
+        'unike':         len(vehicle_visits),
         'ukjente_count': ukjente_count,
         'vehicle_stats': vehicle_stats[:30],
         'top5':          vehicle_stats[:5],
         'daily':         daily,
         'weekday':       [{'day': dager[i], 'count': weekday_cnt.get(i, 0)} for i in range(7)],
         'hourly':        [{'hour': f'{i:02d}', 'count': hour_cnt.get(i, 0)} for i in range(24)],
-        'hjemme_stats':  hjemme_stats,
     }
 
-
-def load_skilt():
-    try:
-        with open(SKILT_FILE) as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-
-
-def save_skilt(data):
-    with open(SKILT_FILE, 'w') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-def read_lines(filepath, compressed=False):
-    try:
-        if compressed:
-            with gzip.open(filepath, 'rt', encoding='utf-8', errors='ignore') as f:
-                return f.readlines()
-        with open(filepath, encoding='utf-8', errors='ignore') as f:
-            return f.readlines()
-    except FileNotFoundError:
-        return []
-
-
-LOGG_DB = "/opt/homeserver/lpr_ukjente/logg.db"
-
-def load_all_lines():
-    try:
-        conn = sqlite3.connect(LOGG_DB)
-        rows = conn.execute("SELECT tidspunkt, plate, camera FROM logg ORDER BY id ASC").fetchall()
-        conn.close()
-        return [f"{r[0]} {r[1]} {r[2] or ''}\n" for r in rows]
-    except Exception:
-        return []
-
-def load_today_lines():
-    try:
-        conn = sqlite3.connect(LOGG_DB)
-        today = datetime.now().strftime('%Y-%m-%d')
-        rows = conn.execute(
-            "SELECT tidspunkt, plate, camera FROM logg WHERE tidspunkt LIKE ? ORDER BY id ASC",
-            (f"{today}%",)
-        ).fetchall()
-        conn.close()
-        return [f"{r[0]} {r[1]} {r[2] or ''}\n" for r in rows]
-    except Exception:
-        return []
-def load_logg_entries(all_=False):
-    try:
-        skilt = load_skilt()
-        conn_logg = sqlite3.connect(LOGG_DB)
-        conn_logg.row_factory = sqlite3.Row
-        if all_:
-            rows = conn_logg.execute(
-                "SELECT id, tidspunkt, plate, camera FROM logg ORDER BY id DESC"
-            ).fetchall()
-        else:
-            today = datetime.now().strftime('%Y-%m-%d')
-            rows = conn_logg.execute(
-                "SELECT id, tidspunkt, plate, camera FROM logg WHERE tidspunkt LIKE ? ORDER BY id DESC",
-                (f"{today}%",)
-            ).fetchall()
-        conn_logg.close()
-
-        # Hent alle ukjente for å koble snapshot
-        conn_ukjente = sqlite3.connect(UKJENTE_DB)
-        conn_ukjente.row_factory = sqlite3.Row
-        ukjente_rows = conn_ukjente.execute(
-            "SELECT tidspunkt, plate, snapshot, kilde, frigate_plate FROM ukjente"
-        ).fetchall()
-        conn_ukjente.close()
-
-        # Bygg oppslagstabell: (plate, dato+time uten sekunder) -> ukjente-rad
-        ukjente_map = {}
-        for u in ukjente_rows:
-            key = (u['plate'], u['tidspunkt'][:16])  # match på minutt
-            ukjente_map[key] = u
-
-        result = []
-        for r in rows:
-            plate = r['plate']
-            key = (plate, r['tidspunkt'][:16])
-            u = ukjente_map.get(key)
-            snapshot = None
-            kilde = None
-            frigate_plate = None
-            if u and u['snapshot']:
-                snapshot = '/snapshot/' + os.path.basename(u['snapshot'])
-                kilde = u['kilde']
-                frigate_plate = u['frigate_plate']
-            result.append({
-                'tidspunkt': r['tidspunkt'],
-                'dato':      r['tidspunkt'][:10],
-                'tid':       r['tidspunkt'][11:16],
-                'plate':     plate,
-                'camera':    r['camera'] or '',
-                'navn':      skilt.get(plate, ''),
-                'snapshot':  snapshot,
-                'kilde':     kilde,
-                'frigate_plate': frigate_plate,
-                'linje':     f"{r['tidspunkt']} {plate}",
-            })
-        return result
-    except Exception as e:
-        log.warning(f"load_logg_entries feilet: {e}")
-        return []
-    
 def get_system_stats():
     stats = {}
     try:
@@ -494,147 +402,6 @@ def get_system_stats():
     return stats
 
 
-def load_weather(hours):
-    bucket_sec = {3: 0, 24: 300, 168: 1800}.get(hours, 0)
-    cutoff     = datetime.now() - timedelta(hours=hours)
-    epoch      = datetime(1970, 1, 1)
-    raw        = []
-    try:
-        with open(WEATHER_LOG, 'r') as f:
-            for row in csv.reader(f):
-                if len(row) < 2:
-                    continue
-                try:
-                    ts = datetime.fromisoformat(row[0])
-                    if ts < cutoff:
-                        continue
-                    raw.append({
-                        'ts':        ts,
-                        'temp':      float(row[1]) if len(row) > 1 and row[1] else None,
-                        'wind':      float(row[2]) if len(row) > 2 and row[2] else None,
-                        'rain':      int(row[3])   if len(row) > 3 and row[3] else 0,
-                        'storm':     int(row[4])   if len(row) > 4 and row[4] else 0,
-                        'solskinn':  int(row[5])   if len(row) > 5 and row[5] else 0,
-                        'lysstyrke': int(float(row[6])) if len(row) > 6 and row[6] else None,
-                    })
-                except (ValueError, IndexError):
-                    continue
-    except FileNotFoundError:
-        return []
-    if not raw:
-        return []
-    if bucket_sec == 0:
-        return [{'ts': r['ts'].strftime('%Y-%m-%dT%H:%M:%S'), 'temp': r['temp'],
-                 'wind': r['wind'], 'rain': r['rain'], 'storm': r['storm'],
-                 'solskinn': r['solskinn'], 'lysstyrke': r['lysstyrke']} for r in raw]
-    buckets = defaultdict(list)
-    for r in raw:
-        key = int((r['ts'] - epoch).total_seconds() // bucket_sec) * bucket_sec
-        buckets[key].append(r)
-    result = []
-    for key in sorted(buckets.keys()):
-        group  = buckets[key]
-        temps  = [r['temp']      for r in group if r['temp']      is not None]
-        winds  = [r['wind']      for r in group if r['wind']      is not None]
-        lux    = [r['lysstyrke'] for r in group if r['lysstyrke'] is not None]
-        ts     = epoch + timedelta(seconds=key)
-        result.append({
-            'ts':        ts.strftime('%Y-%m-%dT%H:%M:%S'),
-            'temp':      round(sum(temps) / len(temps), 1) if temps else None,
-            'wind':      round(sum(winds) / len(winds), 1) if winds else None,
-            'rain':      max(r['rain']     for r in group),
-            'storm':     max(r['storm']    for r in group),
-            'solskinn':  max(r['solskinn'] for r in group),
-            'lysstyrke': int(sum(lux) / len(lux)) if lux else None,
-        })
-    return result
-
-
-def load_ludvig():
-    events = []
-    try:
-        with open(LUDVIG_LOG, 'r') as f:
-            for row in csv.reader(f):
-                if len(row) < 1:
-                    continue
-                try:
-                    events.append(datetime.fromisoformat(row[0]))
-                except ValueError:
-                    continue
-    except FileNotFoundError:
-        pass
-
-    events.sort()
-
-    def get_night_date(ts):
-        if ts.hour >= 17:
-            return ts.date()
-        elif ts.hour < 10:
-            return (ts - timedelta(days=1)).date()
-        return None
-
-    nights = defaultdict(list)
-    for ev in events:
-        nd = get_night_date(ev)
-        if nd is not None:
-            nights[nd].append(ev)
-
-    today       = datetime.now().date()
-    nights_data = []
-    for i in range(13, -1, -1):
-        d   = today - timedelta(days=i)
-        evs = nights.get(d, [])
-        nights_data.append({
-            'date':  d.isoformat(),
-            'label': d.strftime('%-d. %b'),
-            'count': len(evs),
-            'first': evs[0].strftime('%H:%M')  if evs else None,
-            'last':  evs[-1].strftime('%H:%M') if evs else None,
-        })
-
-    all_nights = [(d, evs) for d, evs in nights.items() if evs]
-    stats = None
-    if all_nights:
-        counts   = [len(evs) for _, evs in all_nights]
-        worst    = max(all_nights, key=lambda x: len(x[1]))
-        calmest  = min(all_nights, key=lambda x: len(x[1]))
-        all_evs  = [ev for _, evs in all_nights for ev in evs]
-        def sort_key(ev):
-            return ev.hour - 17 if ev.hour >= 17 else ev.hour + 7
-        stats = {
-            'avg':           round(sum(counts) / len(counts), 1),
-            'worst_date':    worst[0].strftime('%-d. %b'),
-            'worst_count':   len(worst[1]),
-            'calmest_date':  calmest[0].strftime('%-d. %b'),
-            'calmest_count': len(calmest[1]),
-            'earliest':      min(all_evs, key=sort_key).strftime('%H:%M'),
-            'latest':        max(all_evs, key=sort_key).strftime('%H:%M'),
-        }
-
-    recent = [{'ts': ev.strftime('%Y-%m-%dT%H:%M:%S'),
-               'date': ev.strftime('%-d. %b'),
-               'time': ev.strftime('%H:%M')}
-              for ev in reversed(events[-100:])]
-
-    # Timeline: siste 3 døgn
-    today_date = datetime.now().date()
-    timeline = []
-    for i in range(2, -1, -1):
-        d   = today_date - timedelta(days=i)
-        evs = [ev for ev in events if ev.date() == d]
-        timeline.append({
-            'label':  d.strftime('%-d. %b'),
-            'events': [{'time': ev.strftime('%H:%M'),
-                        'hour': ev.hour + ev.minute / 60} for ev in evs]
-        })
-
-    return {'nights': nights_data, 'stats': stats, 'events': recent, 'timeline': timeline}
-
-
-
-
-
-
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
@@ -654,7 +421,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def serve_static(self, path):
-        filepath = STATIC_DIR + path[7:]  # strip /static
+        filepath = STATIC_DIR + path[7:]
         try:
             mime, _ = mimetypes.guess_type(filepath)
             with open(filepath, 'rb') as f:
@@ -683,26 +450,6 @@ class Handler(BaseHTTPRequestHandler):
 
         if parsed.path == '/api/status':
             self.send_json(get_system_stats())
-            return
-
-        if parsed.path == '/api/storm':
-            try:
-                with open(STORM_FILE) as f:
-                    val = int(f.read().strip())
-            except Exception:
-                val = 0
-            self.send_json({'storm': val})
-            return
-
-        if parsed.path == '/api/weather':
-            qs     = parse_qs(parsed.query)
-            range_ = qs.get('range', ['3h'])[0]
-            hours  = {'3h': 3, '1d': 24, '7d': 168}.get(range_, 3)
-            self.send_json(load_weather(hours))
-            return
-
-        if parsed.path == '/api/ludvig':
-            self.send_json(load_ludvig())
             return
 
         if parsed.path == '/api/logg':
@@ -830,8 +577,8 @@ class Handler(BaseHTTPRequestHandler):
                     ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', url],
                     capture_output=True, text=True, timeout=10
                 )
-                data    = json.loads(result.stdout)
-                video   = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), None)
+                data  = json.loads(result.stdout)
+                video = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), None)
                 if video:
                     fps_str = video.get('r_frame_rate', '25/1')
                     try:
@@ -865,7 +612,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 cameras = []
             services = {}
-            for svc in ['lpr-bridge', 'lpr-web', 'ludvig-bridge', 'weather-bridge', 'borte-bridge']:
+            for svc in ['lpr-bridge', 'lpr-web']:
                 try:
                     active = subprocess.run(['systemctl', 'is-active', svc],
                                             capture_output=True, text=True).stdout.strip()
@@ -893,7 +640,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({
                 'system':   s.get('system', {}),
                 'lpr':      s.get('lpr', {}),
-                'ludvig':   s.get('ludvig', {}),
                 'web':      s.get('web', {}),
                 'cameras':  cameras,
                 'services': services,
@@ -921,7 +667,7 @@ class Handler(BaseHTTPRequestHandler):
                         'detect':  detect.get('enabled', True),
                     }
                 self.send_json(result)
-            except Exception as e:
+            except Exception:
                 self.send_json({})
             return
 
@@ -935,72 +681,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(s)
             return
 
-        if parsed.path == '/api/tts/test':
-            try:
-                import requests as _req
-                s = load_settings()
-                tts = s.get('dashboard', {}).get('tts', {})
-                ip   = tts.get('loxone_ip', '192.168.1.100')
-                user = tts.get('loxone_user', '')
-                pwd  = tts.get('loxone_pass', '')
-                zones = []
-                if tts.get('gang', False): zones.append(tts.get('gang_input', 'TTS LPR Gang'))
-                if tts.get('stue', False): zones.append(tts.get('stue_input', 'TTS LPR Stue'))
-                if not zones: zones = [tts.get('gang_input', 'TTS LPR Gang')]
-                for zone in zones:
-                    from urllib.parse import quote as _q
-                    url = f"http://{user}:{pwd}@{ip}/dev/sps/io/{_q(zone)}/Test%20fra%20dashboard"
-                    _req.get(url, timeout=5)
-                self.send_json({'ok': True})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if parsed.path == '/api/borte':
-            try:
-                with open('/opt/homeserver/borte_state.json') as f:
-                    self.send_json(json.load(f))
-            except Exception:
-                self.send_json({})
-            return
-
-        qs       = parse_qs(parsed.query)
-        show_all = qs.get('all', ['0'])[0] == '1'
-        skilt    = load_skilt()
-        lines    = load_all_lines()
-        lines    = lines[-load_settings()['web'].get('max_log_lines', MAX_LINES):]
-
-        log_rows     = ""
-        current_date = None
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(' ', maxsplit=2)
-            dato  = html.escape(parts[0]) if len(parts) > 0 else ""
-            tid   = html.escape(parts[1]) if len(parts) > 1 else ""
-            plate = html.escape(parts[2].strip()) if len(parts) > 2 else ""
-            if show_all and dato != current_date:
-                current_date = dato
-                log_rows += f'<tr class="date-sep"><td colspan="5">📅 {dato}</td></tr>'
-            eier = skilt.get(plate, "")
-            if eier:
-                eier_html = f'<span class="kjent">{html.escape(eier)}</span>'
-            else:
-                eier_html = (
-                    f'<form method="POST" class="inline">'
-                    f'<input type="hidden" name="action" value="add">'
-                    f'<input type="hidden" name="plate" value="{plate}">'
-                    f'<input type="text" name="name" placeholder="Navn..." required>'
-                    f'<button type="submit">+ Legg til</button>'
-                    f'</form>'
-                )
-            log_rows += (
-                f"<tr><td>{dato}</td><td>{tid}</td>"
-                f"<td><b>{plate}</b></td><td>{eier_html}</td>"
-                f'<td><button class="del" onclick="slettLoggRad(this, \'{dato} {tid} {plate}\')">✕</button></td></tr>'
-            )
-
+        skilt       = load_skilt()
+        stats       = get_system_stats()
+        logg_status = "Oppdateres hvert 30. sekund"
         kjente_rows = (
             '<tr class="add-row"><td colspan="3">'
             '<form method="POST" class="inline" style="display:flex;gap:8px;align-items:center;">'
@@ -1029,32 +712,25 @@ class Handler(BaseHTTPRequestHandler):
                 f'<button type="submit" class="del">Slett</button>'
                 f'</form></td></tr>'
             )
-
-        stats    = get_system_stats()
-        logg_status = "Oppdateres hvert 30. sekund"
-        logg_label  = f"Logg ({len(lines)} – historikk)" if show_all else f"Logg ({len(lines)})"
-        ingen_logg  = '<tr><td colspan="5">Ingen registreringer ennå</td></tr>'
-
         page = load_template({
-            '__SYSTEM_NAME__': load_settings()['system'].get('name', 'Villalarsnes'),
-            '__FRIGATE_URL__': load_settings()['system'].get('frigate_url', 'https://villaserver:8971'),
-            '__PORTAINER_URL__': load_settings()['system'].get('portainer_url', 'http://villaserver:9000'),
-            '__PIHOLE_URL__': load_settings()['system'].get('pihole_url', 'http://villaserver/admin'),
-            '__LOGG_LABEL__':  logg_label,
-            '__SKILT_COUNT__': str(len(skilt)),
-            '__STAT_LOAD__':   stats['load'],
-            '__STAT_RAM__':    stats['ram'],
-            '__STAT_DISK__':   stats['disk'],
-            '__RAM_PCT__':     str(stats['ram_pct']),
-            '__DISK_PCT__':    str(stats['disk_pct']),
-            '__LOGG_STATUS__': logg_status,
-            '__LOG_ROWS__':    '',
-            '__KJENTE_ROWS__': kjente_rows,
+            '__SYSTEM_NAME__':  load_settings()['system'].get('name', 'OLPR'),
+            '__FRIGATE_URL__':  load_settings()['system'].get('frigate_url', 'http://localhost:5000'),
+            '__PORTAINER_URL__': load_settings()['system'].get('portainer_url', 'http://localhost:9000'),
+            '__LOGG_LABEL__':   'Logg',
+            '__SKILT_COUNT__':  str(len(skilt)),
+            '__STAT_LOAD__':    stats['load'],
+            '__STAT_RAM__':     stats['ram'],
+            '__STAT_DISK__':    stats['disk'],
+            '__RAM_PCT__':      str(stats['ram_pct']),
+            '__DISK_PCT__':     str(stats['disk_pct']),
+            '__LOGG_STATUS__':  logg_status,
+            '__LOG_ROWS__':     '',
+            '__KJENTE_ROWS__':  kjente_rows,
         })
         self.send_html(page)
 
     def do_POST(self):
-        length = int(self.headers.get('Content-Length', 0))
+        length   = int(self.headers.get('Content-Length', 0))
         raw_body = self.rfile.read(length).decode() if length else '{}'
         try:
             post_params = json.loads(raw_body)
@@ -1066,86 +742,28 @@ class Handler(BaseHTTPRequestHandler):
             def do_restart():
                 import time as _t, subprocess as _sp
                 _t.sleep(0.5)
-                for svc in ['lpr-bridge', 'ludvig-bridge', 'weather-bridge', 'borte-bridge']:
-                    restart_service(svc)
+                restart_service('lpr-bridge')
                 _sp.run(['docker', 'restart', 'frigate'], timeout=60)
                 restart_service('lpr-web')
             _th.Thread(target=do_restart, daemon=True).start()
             self.send_json({'ok': True, 'message': 'Restarter alle tjenester...'})
             return
 
-        if self.path == '/api/tts/test':
-            try:
-                import requests as _req
-                s = load_settings()
-                tts = s.get('dashboard', {}).get('tts', {})
-                ip   = tts.get('loxone_ip', '192.168.1.100')
-                user = tts.get('loxone_user', '')
-                pwd  = tts.get('loxone_pass', '')
-                zones = []
-                if tts.get('gang', False): zones.append(tts.get('gang_input', 'TTS LPR Gang'))
-                if tts.get('stue', False): zones.append(tts.get('stue_input', 'TTS LPR Stue'))
-                if not zones: zones = [tts.get('gang_input', 'TTS LPR Gang')]
-                for zone in zones:
-                    from urllib.parse import quote as _q
-                    url = f"http://{user}:{pwd}@{ip}/dev/sps/io/{_q(zone)}/Test%20fra%20dashboard"
-                    _req.get(url, timeout=5)
-                self.send_json({'ok': True})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if self.path == '/api/settings/dashboard/tts':
-            try:
-                s = load_settings()
-                existing = s.get('dashboard', {}).get('tts', {})
-                # Bare oppdater user-felt, bevar system-felt
-                allowed = {'enabled', 'gang', 'stue', 'volume'}
-                filtered = {k: v for k, v in post_params.items() if k in allowed}
-                s.setdefault('dashboard', {})['tts'] = {**existing, **filtered}
-                save_settings_file(s)
-                self.send_json({'ok': True})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
         if self.path == '/api/cameras':
             try:
                 cameras = json.loads(raw_body)
                 s = load_settings()
-                old_lpr = {c['name']: c.get('lpr', False) for c in s.get('cameras', [])}
-                new_lpr = {c['name']: c.get('lpr', False) for c in cameras}
-                lpr_changed = old_lpr != new_lpr
                 s['cameras'] = cameras
                 save_settings_file(s)
-                restarted = []
-                if lpr_changed:
-                    sync_frigate_snapshots(cameras)
-                    try:
-                        r = subprocess.run(['docker', 'restart', 'frigate'],
-                                           capture_output=True, text=True, timeout=60)
-                        if r.returncode == 0:
-                            restarted.append('frigate')
-                        else:
-                            log.warning(f"docker restart frigate feilet: {r.stderr}")
-                    except subprocess.TimeoutExpired:
-                        log.warning("docker restart frigate tidsavbrutt")
-                    except Exception as e:
-                        log.warning(f"docker restart frigate exception: {e}")
-                    restart_service('lpr-bridge')
-                    restarted.append('lpr-bridge')
-                self.send_json({'ok': True, 'restarted': restarted})
+                restart_service('lpr-bridge')
+                self.send_json({'ok': True, 'restarted': ['lpr-bridge']})
             except Exception as e:
                 self.send_json({'ok': False, 'error': str(e)})
             return
 
         if self.path == '/api/settings':
             try:
-                data   = json.loads(raw_body)
-                current = load_settings()
-                lpr_changed    = data.get('lpr')    != current.get('lpr')
-                ludvig_changed = data.get('ludvig') != current.get('ludvig')
-                # Bevar cameras-seksjonen
+                data = json.loads(raw_body)
                 try:
                     with open(SETTINGS_FILE) as _f:
                         _existing = json.load(_f)
@@ -1153,14 +771,13 @@ class Handler(BaseHTTPRequestHandler):
                         data['cameras'] = _existing['cameras']
                 except Exception:
                     pass
+                current     = load_settings()
+                lpr_changed = data.get('lpr') != current.get('lpr')
                 save_settings_file(data)
                 restarted = []
                 if lpr_changed:
                     restart_service('lpr-bridge')
                     restarted.append('lpr-bridge')
-                if ludvig_changed:
-                    restart_service('ludvig-bridge')
-                    restarted.append('ludvig-bridge')
                 self.send_json({'ok': True, 'restarted': restarted})
             except Exception as e:
                 self.send_json({'ok': False, 'error': str(e)})
@@ -1168,8 +785,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == '/api/logg/slett':
             try:
-                params = parse_qs(raw_body)
-                linje  = params.get('linje', [''])[0]
+                params    = parse_qs(raw_body)
+                linje     = params.get('linje', [''])[0]
                 if linje:
                     parts = linje.strip().split(' ', maxsplit=2)
                     if len(parts) >= 3:
@@ -1183,31 +800,6 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({'ok': True})
             except Exception as e:
                 self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if self.path == '/api/borte/reset':
-            try:
-                with open('/opt/homeserver/borte_state.json') as f:
-                    data = json.load(f)
-                data['last_run_date']      = None
-                data['last_run_confirmed'] = None
-                with open('/opt/homeserver/borte_state.json', 'w') as f:
-                    json.dump(data, f, indent=2)
-                self.send_json({'ok': True})
-            except Exception:
-                self.send_json({'ok': False})
-            return
-
-        if self.path == '/api/borte/toggle':
-            try:
-                with open('/opt/homeserver/borte_state.json') as f:
-                    data = json.load(f)
-                data['automatikk'] = not data.get('automatikk', True)
-                with open('/opt/homeserver/borte_state.json', 'w') as f:
-                    json.dump(data, f, indent=2)
-                self.send_json({'automatikk': data['automatikk']})
-            except Exception:
-                self.send_json({})
             return
 
         try:
