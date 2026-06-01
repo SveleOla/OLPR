@@ -67,7 +67,20 @@ let currentSettings = {};
 function loadSettingsPage() {
   fetch('/api/settings')
     .then(r => r.json())
-    .then(data => { currentSettings = data; renderSettings(data); })
+    .then(data => {
+      currentSettings = data;
+      renderSettings(data);
+      fetch('/api/network')
+        .then(r => r.json())
+        .then(net => {
+          if (net.ok) {
+            ['ip','netmask','gateway','dns'].forEach(k => {
+              const el = document.getElementById('s-network-' + k);
+              if (el && !el.value) el.value = net[k] || '';
+            });
+          }
+        });
+    })
     .catch(() => {});
 }
 
@@ -115,6 +128,24 @@ function renderSettings(data) {
 }
 
 function saveSection(sectionKey) {
+  if (sectionKey === 'network') {
+    const section = SETTINGS_SCHEMA.find(s => s.key === 'network');
+    const data = {};
+    section.fields.forEach(f => { data[f.key] = getFieldValue('network', f); });
+    if (!confirm('Advarsel: Endring av IP vil koble deg fra nåværende sesjon. Fortsett?')) return;
+    fetch('/api/network', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    }).then(r => r.json()).then(d => {
+      if (d.ok) {
+        alert('Nettverksinnstillinger lagret. Koble til ny IP: ' + d.new_ip);
+        window.location.href = 'http://' + d.new_ip + ':8080';
+      } else {
+        alert('Feil: ' + d.error);
+      }
+    }).catch(() => {});
+    return;
+  }
   const section = SETTINGS_SCHEMA.find(s => s.key === sectionKey);
   if (!section) return;
   const sectionData = {};
@@ -129,8 +160,8 @@ function saveSection(sectionKey) {
     currentSettings = newSettings;
     if (statusEl) {
       const r = d.restarted && d.restarted.length ? ` (${d.restarted.join(', ')} restartet)` : '';
-      statusEl.textContent = '✅ Lagret' + r;
+      statusEl.textContent = 'Lagret' + r;
       setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 4000);
     }
-  }).catch(() => { if (statusEl) statusEl.textContent = '❌ Feil'; });
+  }).catch(() => { if (statusEl) statusEl.textContent = 'Feil'; });
 }

@@ -719,6 +719,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json({'ok': False, 'error': str(e)})
             return
 
+        if parsed.path == '/api/network':
+            try:
+                import subprocess as _sp
+                ip      = _sp.run(['hostname', '-I'], capture_output=True, text=True).stdout.strip().split()[0]
+                gateway = _sp.run(['ip', 'route', 'show', 'default'], capture_output=True, text=True).stdout.split()[2]
+                self.send_json({'ok': True, 'ip': ip, 'netmask': '255.255.255.0', 'gateway': gateway, 'dns': gateway})
+            except Exception as e:
+                self.send_json({'ok': False, 'error': str(e)})
+            return
+
         if parsed.path == '/api/cameras':
             try:
                 with open(SETTINGS_FILE) as f:
