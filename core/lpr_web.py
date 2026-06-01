@@ -962,7 +962,9 @@ class Handler(BaseHTTPRequestHandler):
                 save_settings_file(s)
                 generate_frigate_config(cameras)
                 restart_service('lpr-bridge')
-                self.send_json({'ok': True, 'restarted': ['lpr-bridge']})
+                import subprocess as _sp
+                _sp.run(['docker', 'restart', 'frigate'], timeout=60)
+                self.send_json({'ok': True, 'restarted': ['lpr-bridge', 'frigate']})
             except Exception as e:
                 self.send_json({'ok': False, 'error': str(e)})
             return
