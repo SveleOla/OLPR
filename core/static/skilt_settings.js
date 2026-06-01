@@ -165,7 +165,9 @@ function renderCameras() {
 function camFormField(field, val) {
   const id = `edit-${field.key}`;
   let input;
-  if (field.type === 'password')
+  if (field.type === 'select')
+    input = `<select id="${id}" class="settings-input" style="width:200px">${(field.options||[]).map(o=>`<option value="${o.value}" ${val===o.value?'selected':''}>${o.label}</option>`).join('')}</select>`;
+  else if (field.type === 'password')
     input = `<input type="password" id="${id}" value="${val||''}" class="settings-input" style="width:180px">`;
   else if (field.type === 'number')
     input = `<input type="number" id="${id}" value="${val??''}" min="${field.min}" max="${field.max}" step="${field.step}" class="settings-input">`;
