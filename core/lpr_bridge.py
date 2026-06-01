@@ -61,11 +61,14 @@ def _load_full_settings():
 
 def _get_mqtt_topic(key, camera):
     try:
-        topics = _load_full_settings().get('mqtt', {})
+        s = _load_full_settings()
+        topics = s.get('mqtt', {})
+        system_name = s.get('system', {}).get('name', 'olpr').lower().replace(' ', '-')
     except Exception:
         topics = {}
-    default = {"result_topic": "lpr/{camera}/resultat", "plate_topic": "lpr/{camera}/skilt"}
-    return topics.get(key, default[key]).replace("{camera}", camera)
+        system_name = 'olpr'
+    default = {"result_topic": "{system}/{camera}/resultat", "plate_topic": "{system}/{camera}/skilt"}
+    return topics.get(key, default[key]).replace("{camera}", camera).replace("{system}", system_name)
 
 def load_lpr_cameras():
     try:

@@ -30,6 +30,7 @@ const LPR_SCHEMA = {
 
 let skiltSettings = {};
 let cameras = [];
+let systemName = 'olpr';
 let editingCamera = null;
 
 const CAM_FIELDS = [
@@ -52,6 +53,7 @@ function loadSkiltSettings() {
   ]).then(([settings, cams]) => {
     skiltSettings = settings;
     cameras = cams;
+    systemName = (settings.system?.name || 'olpr').toLowerCase().replace(/ /g, '-');
     renderLPRSettings(settings);
     renderCameras();
   }).catch(() => {});
@@ -136,8 +138,8 @@ function renderCameras() {
       </div>
       ${cam.lpr ? `<div class="cam-mqtt">
         <span class="cam-mqtt-label">MQTT</span>
-        <code class="cam-mqtt-topic">lpr/${cam.name}/resultat</code>
-        <button class="cam-copy-btn" onclick="copyTopic('lpr/${cam.name}/resultat', this)" title="Kopier">📋</button>
+        <code class="cam-mqtt-topic">${systemName}/${cam.name}/resultat</code>
+        <button class="cam-copy-btn" onclick="copyTopic('${systemName}/${cam.name}/resultat', this)" title="Kopier">📋</button>
       </div>` : ''}
       <div class="camera-actions">
         <button onclick="testCamera(${i})">Test</button>
