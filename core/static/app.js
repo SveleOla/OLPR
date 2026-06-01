@@ -40,7 +40,7 @@ if (initTab && ['skiltgjenkjenning','innstillinger','dok'].includes(initTab)) {
     if (initTab === 'skiltgjenkjenning') showSubTab(initSub);
   });
 } else {
-  window.addEventListener('DOMContentLoaded', () => showSubTab('logg'));
+  window.addEventListener('DOMContentLoaded', () => showSubTab('statistikk'));
 }
 
 const showAll = params.get('all') === '1';
