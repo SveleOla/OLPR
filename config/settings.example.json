@@ -13,19 +13,21 @@
     "mqtt_port": 1883
   },
   "mqtt": {
-    "result_topic": "lpr/{camera}/resultat",
-    "plate_topic": "lpr/{camera}/skilt"
+    "result_topic": "{system}/{camera}/resultat",
+    "plate_topic": "{system}/{camera}/skilt"
   },
   "web": {
     "max_log_lines": 2000,
-    "stats_refresh_sec": 15,
-    "storm_refresh_sec": 3
+    "stats_refresh_sec": 15
   },
   "system": {
     "name": "OLPR",
     "frigate_url": "http://localhost:5000",
-    "portainer_url": "http://localhost:9000",
-    "pihole_url": "http://localhost/admin"
+    "portainer_url": "http://localhost:9000"
+  },
+  "frigate": {
+    "detector": "cpu",
+    "hwaccel": "preset-vaapi"
   },
   "cameras": []
 }

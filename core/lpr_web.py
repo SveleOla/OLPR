@@ -68,6 +68,14 @@ def generate_frigate_config(cameras):
     """Generer frigate/config.yml fra cameras-lista i settings.json."""
     import os as _os
     config_path = _os.path.join(_os.path.dirname(BASE_DIR), 'core', 'frigate', 'config.yml')
+    frigate_settings = load_settings().get('frigate', {})
+    detector = frigate_settings.get('detector', 'cpu')
+    hwaccel  = frigate_settings.get('hwaccel', 'preset-vaapi')
+    if detector == 'coral':
+        detector_block = "coral:\n    type: edgetpu\n    device: usb"
+    else:
+        detector_block = "cpu:\n    type: cpu"
+    hwaccel_line = f"  hwaccel_args: {hwaccel}" if hwaccel else ""
     
     go2rtc_streams = {}
     cam_configs = {}
@@ -133,12 +141,10 @@ def generate_frigate_config(cameras):
   port: 1883
 
 detectors:
-  coral:
-    type: edgetpu
-    device: usb
+  {detector_block}
 
 ffmpeg:
-  hwaccel_args: preset-vaapi
+{hwaccel_line}
 
 lpr:
   enabled: true

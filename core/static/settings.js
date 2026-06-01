@@ -12,6 +12,25 @@ const SETTINGS_SCHEMA = [
     ]
   },
   {
+    key: 'frigate', label: 'Frigate', icon: '📹',
+    restart: 'frigate', restartLabel: 'Lagre & restart Frigate',
+    fields: [
+      { key: 'detector', label: 'Detektor', type: 'select',
+        options: [
+          { value: 'cpu',   label: 'CPU (ingen TPU)' },
+          { value: 'coral', label: 'Google Coral TPU' },
+        ],
+        tip: 'Velg CPU hvis du ikke har Google Coral TPU installert.' },
+      { key: 'hwaccel', label: 'Hardware-akselerasjon', type: 'select',
+        options: [
+          { value: 'preset-vaapi',  label: 'Intel VAAPI (anbefalt)' },
+          { value: 'preset-rpi4',   label: 'Raspberry Pi 4' },
+          { value: '',              label: 'Ingen (CPU)' },
+        ],
+        tip: 'Hardware-akselerasjon for videodekoding. Intel VAAPI for de fleste Intel-prosessorer.' },
+    ]
+  },
+  {
     key: 'mqtt', label: 'MQTT', icon: '📡',
     restart: 'lpr-bridge', restartLabel: 'Lagre & restart LPR-bridge',
     fields: [
