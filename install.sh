@@ -72,7 +72,7 @@ fi
 # 6. Start Docker-tjenester (ikke Frigate)
 echo "[6/7] Starter Docker-tjenester..."
 cd "$INSTALL_DIR"
-docker compose up -d mosquitto portainer
+docker compose up -d
 
 # Vent på Mosquitto
 echo "  Venter på Mosquitto..."
