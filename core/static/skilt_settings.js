@@ -46,7 +46,7 @@ const CAM_FIELDS = [
       { value: 'sub',  label: 'Substrøm (anbefalt, H.264)' },
       { value: 'main', label: 'Hovedstrøm (hvis substrøm er H.265)' },
     ],
-    tip: 'Velg hvilken strøm Frigate bruker til deteksjon. Bruk hovedstrøm hvis substrøm sender H.265.' },
+    tip: 'H.264 støttes av all hardware. H.265 gir bedre kvalitet ved lavere båndbredde, men krever Intel 6th gen+ eller dedikert GPU for VAAPI-dekoding. Sjekk codec med Test-knappen.' },
   { key: 'width',        label: 'Bredde (px)',   type: 'number', min: 320, max: 3840, step: 1, tip: 'Deteksjonsoppløsning bredde. Hentes automatisk ved Test tilkobling.' },
   { key: 'height',       label: 'Høyde (px)',    type: 'number', min: 180, max: 2160, step: 1, tip: 'Deteksjonsoppløsning høyde. Hentes automatisk ved Test tilkobling.' },
   { key: 'fps',          label: 'FPS',           type: 'number', min: 1, max: 30, step: 1, tip: 'Bilder per sekund for deteksjon. Hentes automatisk ved Test tilkobling.' },
