@@ -1,7 +1,9 @@
 function showSubTab(name) {
-  ['logg','kjente','statistikk','innstillinger'].forEach(t => {
-    document.getElementById('sub-' + t).classList.add('hidden');
-    document.getElementById('btn-sub-' + t).classList.remove('sub-active');
+  ['logg','kjente','statistikk','innstillinger','dok'].forEach(t => {
+    const _el = document.getElementById('sub-' + t);
+    const _btn = document.getElementById('btn-sub-' + t);
+    if (_el) _el.classList.add('hidden');
+    if (_btn) _btn.classList.remove('sub-active');
   });
   document.getElementById('sub-' + name).classList.remove('hidden');
   document.getElementById('btn-sub-' + name).classList.add('sub-active');
@@ -18,6 +20,10 @@ function showSubTab(name) {
   }
   if (name === 'innstillinger') {
     if (typeof loadSkiltSettings === 'function') loadSkiltSettings();
+    if (typeof loadSettingsPage === 'function') loadSettingsPage();
+  }
+  if (name === 'dok') {
+    if (typeof loadDocs === 'function') loadDocs();
   }
 }
 
