@@ -31,6 +31,16 @@ const SETTINGS_SCHEMA = [
     ]
   },
   {
+    key: 'network', label: 'Nettverk', icon: '🌐',
+    restart: null, restartLabel: 'Lagre',
+    fields: [
+      { key: 'ip',      label: 'IP-adresse',  type: 'text', tip: 'Statisk IP-adresse for serveren. Endring vil koble deg fra nåværende sesjon.' },
+      { key: 'netmask', label: 'Nettmaske',    type: 'text', tip: 'Vanligvis 255.255.255.0 for hjemmenettverk.' },
+      { key: 'gateway', label: 'Gateway',      type: 'text', tip: 'IP-adressen til ruteren din.' },
+      { key: 'dns',     label: 'DNS-server',   type: 'text', tip: 'Vanligvis samme som gateway, eller 8.8.8.8 for Google DNS.' },
+    ]
+  },
+  {
     key: 'mqtt', label: 'MQTT', icon: '📡',
     restart: 'lpr-bridge', restartLabel: 'Lagre & restart LPR-bridge',
     fields: [

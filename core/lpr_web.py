@@ -884,6 +884,50 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as e:
                 self.send_json({'ok': False, 'error': str(e)})
             return
+        if self.path == '/api/network':
+            try:
+                data    = json.loads(raw_body)
+                ip      = data.get('ip', '').strip()
+                netmask = data.get('netmask', '255.255.255.0').strip()
+                gateway = data.get('gateway', '').strip()
+                dns     = data.get('dns', '').strip()
+                if not ip or not gateway:
+                    self.send_json({'ok': False, 'error': 'IP og gateway er påkrevd'})
+                    return
+                iface = 'eth0'
+                try:
+                    import subprocess as _sp
+                    result = _sp.run(['ip', 'route', 'show', 'default'],
+                                     capture_output=True, text=True)
+                    for part in result.stdout.split():
+                        if part not in ('default', 'via', 'dev', 'proto', 'metric', 'onlink'):
+                            if not part[0].isdigit() or '.' not in part:
+                                iface = part
+                                break
+                except Exception:
+                    pass
+                config = f"""auto lo
+iface lo inet loopback
+
+auto {iface}
+iface {iface} inet static
+    address {ip}
+    netmask {netmask}
+    gateway {gateway}
+    dns-nameservers {dns or gateway}
+"""
+                with open('/etc/network/interfaces', 'w') as f:
+                    f.write(config)
+                self.send_json({'ok': True, 'new_ip': ip})
+                import threading as _th
+                def _restart():
+                    import time as _t, subprocess as _sp
+                    _t.sleep(1)
+                    _sp.run(['systemctl', 'restart', 'networking'])
+                _th.Thread(target=_restart, daemon=True).start()
+            except Exception as e:
+                self.send_json({'ok': False, 'error': str(e)})
+            return
 
         if self.path == '/api/settings':
             try:
