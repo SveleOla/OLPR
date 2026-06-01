@@ -18,6 +18,8 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ./frigate/storage:/media/frigate
       - /dev/bus/usb:/dev/bus/usb
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
     shm_size: '512mb'
 
   homebridge:
