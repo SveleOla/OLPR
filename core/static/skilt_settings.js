@@ -41,6 +41,12 @@ const CAM_FIELDS = [
   { key: 'pass',         label: 'RTSP passord',  type: 'password', tip: 'Passord for RTSP-tilkobling.' },
   { key: 'main_path',    label: 'Hoved-sti',     type: 'text', tip: 'RTSP-sti for hovedstrøm (høy oppløsning, brukes til opptak og LPR).' },
   { key: 'sub_path',     label: 'Sub-sti',       type: 'text', tip: 'RTSP-sti for substrøm (lav oppløsning, brukes til deteksjon). La stå tom for kameraer som kun har én RTSP-strøm.' },
+  { key: 'detect_stream', label: 'Detect-strøm', type: 'select',
+    options: [
+      { value: 'sub',  label: 'Substrøm (anbefalt, H.264)' },
+      { value: 'main', label: 'Hovedstrøm (hvis substrøm er H.265)' },
+    ],
+    tip: 'Velg hvilken strøm Frigate bruker til deteksjon. Bruk hovedstrøm hvis substrøm sender H.265.' },
   { key: 'width',        label: 'Bredde (px)',   type: 'number', min: 320, max: 3840, step: 1, tip: 'Deteksjonsoppløsning bredde. Hentes automatisk ved Test tilkobling.' },
   { key: 'height',       label: 'Høyde (px)',    type: 'number', min: 180, max: 2160, step: 1, tip: 'Deteksjonsoppløsning høyde. Hentes automatisk ved Test tilkobling.' },
   { key: 'fps',          label: 'FPS',           type: 'number', min: 1, max: 30, step: 1, tip: 'Bilder per sekund for deteksjon. Hentes automatisk ved Test tilkobling.' },
@@ -286,7 +292,7 @@ function saveEditCamera() {
 function addCamera() {
   editingCamera = null;
   cameras.push({name:'', display_name:'Nytt kamera', ip:'', user:'frigate',
-    pass:'', main_path:'/Streaming/Channels/101', sub_path:'/Streaming/Channels/102',
+    pass:'', main_path:'/Streaming/Channels/101', sub_path:'/Streaming/Channels/102', detect_stream:'sub',
     lpr:false, objects:['person','car'], record:true, width:640, height:360, fps:5, codec:'h264'});
   editCamera(cameras.length - 1);
 }

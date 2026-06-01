@@ -87,6 +87,7 @@ def generate_frigate_config(cameras):
         pwd    = cam.get('pass', '')
         path   = cam.get('rtsp_path', '/Streaming/Channels/101')
         sub    = cam.get('rtsp_path_sub', '/Streaming/Channels/102')
+        detect_stream = cam.get('detect_stream', 'sub')
         width  = cam.get('width', 640)
         height = cam.get('height', 360)
         fps    = cam.get('fps', 5)
@@ -112,7 +113,7 @@ def generate_frigate_config(cameras):
         
         cam_configs[name] = f"""{snap_block}    ffmpeg:
       inputs:
-        - path: rtsp://127.0.0.1:8554/{name}_sub
+        - path: rtsp://127.0.0.1:8554/{name + ('_sub' if detect_stream == 'sub' else '')}
           roles: [detect]
         - path: rtsp://127.0.0.1:8554/{name}
           roles: [record]
