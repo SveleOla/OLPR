@@ -88,6 +88,7 @@ for svc in lpr-bridge lpr-web; do
     > "/etc/systemd/system/$svc.service"
 done
 
+ln -sf $INSTALL_DIR/core/reset-password.sh /usr/local/bin/olpr-reset-password
 systemctl daemon-reload
 systemctl enable lpr-bridge lpr-web
 systemctl start lpr-bridge lpr-web
