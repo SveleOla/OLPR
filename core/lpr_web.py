@@ -75,7 +75,7 @@ def generate_frigate_config(cameras):
     for cam in cameras:
         name   = cam.get('name', '')
         ip     = cam.get('ip', '')
-        user   = cam.get('username', 'admin')
+        user   = cam.get('user', 'admin')
         pwd    = cam.get('password', '')
         path   = cam.get('rtsp_path', '/Streaming/Channels/101')
         sub    = cam.get('rtsp_path_sub', '/Streaming/Channels/102')
