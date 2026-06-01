@@ -19,33 +19,15 @@
   <h1>__SYSTEM_NAME__</h1>
 
   <!-- SERVER STATUS -->
-  <div class="cards" style="margin-bottom:16px;">
-    <div class="card">
-      <h2>🖥️ Server</h2>
-      <div class="stat-row"><span class="stat-label">Load (1/5/15 min)</span><span class="stat-value" id="stat-load">__STAT_LOAD__</span></div>
-      <div class="stat-row"><span class="stat-label">RAM</span><span class="stat-value" id="stat-ram">__STAT_RAM__</span></div>
-      <div class="progress-bar"><div class="progress-fill" id="bar-ram" style="width:__RAM_PCT__%"></div></div>
-      <div class="stat-row"><span class="stat-label">Disk</span><span class="stat-value" id="stat-disk">__STAT_DISK__</span></div>
-      <div class="progress-bar"><div class="progress-fill" id="bar-disk" style="width:__DISK_PCT__%"></div></div>
-    </div>
-    <div class="card">
-      <h2>🔗 Hurtiglenker</h2>
-      <div class="links">
-        <a href="__FRIGATE_URL__" target="_blank" class="link-btn">📹 Frigate</a>
-        <a href="__PORTAINER_URL__" target="_blank" class="link-btn">🐳 Portainer</a>
-      </div>
-    </div>
-  </div>
-
   <div class="sub-tabs">
-    <button id="btn-sub-statistikk" class="sub-active" onclick="showSubTab('statistikk')">Statistikk</button>
+    <button id="btn-sub-statistikk" class="sub-active" onclick="showSubTab('statistikk')">Dashboard</button>
     <button id="btn-sub-logg" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
     <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
     <button id="btn-sub-innstillinger" onclick="showSubTab('innstillinger')">⚙️ Innstillinger</button>
     <button id="btn-sub-dok" onclick="showSubTab('dok')">📖 Dok</button>
   </div>
 
-  <div id="sub-logg">
+  <div id="sub-logg" class="hidden">
     <p class="count">__LOGG_STATUS__</p>
     <button id="btn-historikk" style="margin-bottom:12px">📅 Vis historikk</button>
     <button id="btn-visning" style="margin-bottom:12px">☰ Vis liste</button>
@@ -65,7 +47,24 @@
     </table>
   </div>
 
-  <div id="sub-statistikk" class="hidden">
+  <div id="sub-statistikk">
+    <div class="cards" style="margin-bottom:16px;">
+      <div class="card">
+        <h2>🖥️ Server</h2>
+        <div class="stat-row"><span class="stat-label">Load (1/5/15 min)</span><span class="stat-value" id="stat-load">__STAT_LOAD__</span></div>
+        <div class="stat-row"><span class="stat-label">RAM</span><span class="stat-value" id="stat-ram">__STAT_RAM__</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="bar-ram" style="width:__RAM_PCT__%"></div></div>
+        <div class="stat-row"><span class="stat-label">Disk</span><span class="stat-value" id="stat-disk">__STAT_DISK__</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="bar-disk" style="width:__DISK_PCT__%"></div></div>
+      </div>
+      <div class="card">
+        <h2>🔗 Hurtiglenker</h2>
+        <div class="links">
+          <a href="__FRIGATE_URL__" target="_blank" class="link-btn">📹 Frigate</a>
+          <a href="__PORTAINER_URL__" target="_blank" class="link-btn">🐳 Portainer</a>
+        </div>
+      </div>
+    </div>
     <div class="cards" style="margin-bottom:20px;">
       <div class="card">
         <h2>📊 Oversikt</h2>
