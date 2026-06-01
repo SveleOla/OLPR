@@ -43,8 +43,8 @@ const CAM_FIELDS = [
   { key: 'sub_path',     label: 'Sub-sti',       type: 'text', tip: 'RTSP-sti for substrøm (lav oppløsning, brukes til deteksjon). La stå tom for kameraer som kun har én RTSP-strøm.' },
   { key: 'detect_stream', label: 'Detect-strøm', type: 'select',
     options: [
-      { value: 'sub',  label: 'Substrøm (anbefalt, H.264)' },
-      { value: 'main', label: 'Hovedstrøm (hvis substrøm er H.265)' },
+      { value: 'sub',  label: 'Substrøm' },
+      { value: 'main', label: 'Hovedstrøm' },
     ],
     tip: 'H.264 støttes av all hardware. H.265 gir bedre kvalitet ved lavere båndbredde, men krever Intel 6th gen+ eller dedikert GPU for VAAPI-dekoding. Sjekk codec med Test-knappen.' },
   { key: 'width',        label: 'Bredde (px)',   type: 'number', min: 320, max: 3840, step: 1, tip: 'Deteksjonsoppløsning bredde. Hentes automatisk ved Test tilkobling.' },
