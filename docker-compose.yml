@@ -22,16 +22,6 @@ services:
       - /dev/dri/renderD128:/dev/dri/renderD128
     shm_size: '512mb'
 
-  homebridge:
-    image: homebridge/homebridge:latest
-    container_name: homebridge
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./homebridge:/homebridge
-    environment:
-      - TZ=Europe/Oslo
-
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer

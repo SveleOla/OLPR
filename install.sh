@@ -14,6 +14,8 @@ fi
 INSTALL_DIR="/opt/olpr"
 
 # 1. Systemoppdatering og avhengigheter
+# Installer curl først siden den brukes videre
+apt-get update -qq && apt-get install -y -qq curl
 echo "[1/7] Installerer avhengigheter..."
 apt-get update -qq
 apt-get install -y -qq \
