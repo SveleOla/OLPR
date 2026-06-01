@@ -6,8 +6,10 @@ import sqlite3
 import subprocess
 import time
 import urllib.request
+import hashlib
 import html
 import json
+import secrets
 import mimetypes
 import os
 import shutil
@@ -41,6 +43,22 @@ SETTINGS_DEFAULTS = {
     "mqtt":   {"result_topic": "lpr/{camera}/resultat",
                "plate_topic":  "lpr/{camera}/skilt"},
 }
+
+SESSIONS = {}
+LOGIN_TEMPLATE = os.path.join(BASE_DIR, 'templates', 'login.html')
+
+def check_auth(handler):
+    cookie = handler.headers.get('Cookie', '')
+    for part in cookie.split(';'):
+        part = part.strip()
+        if part.startswith('session='):
+            token = part[8:]
+            if token in SESSIONS:
+                return True
+    return False
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 def load_settings():
     try:
@@ -560,6 +578,30 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
 
+        if parsed.path == '/login':
+            with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
+                tpl = f.read().replace('__ERROR__', '')
+            self.send_html(tpl)
+            return
+
+        if parsed.path == '/logout':
+            cookie = self.headers.get('Cookie', '')
+            for part in cookie.split(';'):
+                part = part.strip()
+                if part.startswith('session='):
+                    SESSIONS.pop(part[8:], None)
+            self.send_response(303)
+            self.send_header('Location', '/login')
+            self.send_header('Set-Cookie', 'session=; Max-Age=0; Path=/')
+            self.end_headers()
+            return
+
+        if not check_auth(self):
+            self.send_response(303)
+            self.send_header('Location', '/login')
+            self.end_headers()
+            return
+
         if parsed.path.startswith('/static/'):
             self.serve_static(parsed.path)
             return
@@ -869,6 +911,36 @@ class Handler(BaseHTTPRequestHandler):
             post_params = json.loads(raw_body)
         except Exception:
             post_params = {}
+
+        if self.path == '/login':
+            try:
+                params   = parse_qs(raw_body)
+                username = params.get('username', [''])[0]
+                password = params.get('password', [''])[0]
+                s        = load_settings()
+                auth     = s.get('auth', {})
+                ok_user  = auth.get('username', 'admin')
+                ok_pass  = auth.get('password', 'olpr')
+                if username == ok_user and password == ok_pass:
+                    token = secrets.token_hex(32)
+                    SESSIONS[token] = username
+                    self.send_response(303)
+                    self.send_header('Location', '/')
+                    self.send_header('Set-Cookie', f'session={token}; Path=/; HttpOnly')
+                    self.end_headers()
+                else:
+                    with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
+                        tpl = f.read().replace('__ERROR__', '<p class="login-error">Feil brukernavn eller passord</p>')
+                    self.send_html(tpl)
+            except Exception as e:
+                self.send_json({'ok': False, 'error': str(e)})
+            return
+
+        if not check_auth(self):
+            self.send_response(303)
+            self.send_header('Location', '/login')
+            self.end_headers()
+            return
 
         if self.path == '/api/restart/all':
             import threading as _th

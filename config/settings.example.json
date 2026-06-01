@@ -29,5 +29,9 @@
     "detector": "cpu",
     "hwaccel": "preset-vaapi"
   },
-  "cameras": []
+  "cameras": [],
+  "auth": {
+    "username": "admin",
+    "password": "olpr"
+  }
 }

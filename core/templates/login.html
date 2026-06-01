@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OLPR – Logg inn</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    body { display:flex; justify-content:center; align-items:center; min-height:100vh; margin:0; }
+    .login-box { background:#1a2535; border:1px solid #2a3f5f; border-radius:12px; padding:40px; width:320px; }
+    .login-box h1 { text-align:center; margin-bottom:32px; font-size:1.5rem; }
+    .login-field { margin-bottom:16px; }
+    .login-field label { display:block; margin-bottom:6px; color:#a0b8d8; font-size:14px; }
+    .login-field input { width:100%; padding:10px; background:#0f1923; border:1px solid #2a3f5f; border-radius:6px; color:#c8d8f0; font-size:15px; box-sizing:border-box; }
+    .login-btn { width:100%; padding:12px; background:#2a6496; border:none; border-radius:6px; color:#fff; font-size:15px; cursor:pointer; margin-top:8px; }
+    .login-btn:hover { background:#3a74a6; }
+    .login-error { color:#e74c3c; text-align:center; margin-top:12px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h1>🔒 OLPR</h1>
+    <form method="POST" action="/login">
+      <div class="login-field">
+        <label>Brukernavn</label>
+        <input type="text" name="username" autofocus>
+      </div>
+      <div class="login-field">
+        <label>Passord</label>
+        <input type="password" name="password">
+      </div>
+      <button type="submit" class="login-btn">Logg inn</button>
+      __ERROR__
+    </form>
+  </div>
+</body>
+</html>
