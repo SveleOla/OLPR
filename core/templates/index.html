@@ -17,110 +17,99 @@
 </head>
 <body>
   <h1>__SYSTEM_NAME__</h1>
-  <div class="tabs">
-    <button id="btn-skiltgjenkjenning" class="active" onclick="showTab('skiltgjenkjenning')">Skiltgjenkjenning</button>
-    <button id="btn-innstillinger" onclick="showTab('innstillinger')">⚙️ Innstillinger</button>
-    <button id="btn-dok" onclick="showTab('dok')">📖 Dok</button>
-  </div>
 
   <!-- SERVER STATUS -->
-  <div id="skiltgjenkjenning">
+  <div class="cards" style="margin-bottom:16px;">
+    <div class="card">
+      <h2>🖥️ Server</h2>
+      <div class="stat-row"><span class="stat-label">Load (1/5/15 min)</span><span class="stat-value" id="stat-load">__STAT_LOAD__</span></div>
+      <div class="stat-row"><span class="stat-label">RAM</span><span class="stat-value" id="stat-ram">__STAT_RAM__</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="bar-ram" style="width:__RAM_PCT__%"></div></div>
+      <div class="stat-row"><span class="stat-label">Disk</span><span class="stat-value" id="stat-disk">__STAT_DISK__</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="bar-disk" style="width:__DISK_PCT__%"></div></div>
+    </div>
+    <div class="card">
+      <h2>🔗 Hurtiglenker</h2>
+      <div class="links">
+        <a href="__FRIGATE_URL__" target="_blank" class="link-btn">📹 Frigate</a>
+        <a href="__PORTAINER_URL__" target="_blank" class="link-btn">🐳 Portainer</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="sub-tabs">
+    <button id="btn-sub-logg" class="sub-active" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
+    <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
+    <button id="btn-sub-statistikk" onclick="showSubTab('statistikk')">Statistikk</button>
+    <button id="btn-sub-innstillinger" onclick="showSubTab('innstillinger')">⚙️ Innstillinger</button>
+    <button id="btn-sub-dok" onclick="showSubTab('dok')">📖 Dok</button>
+  </div>
+
+  <div id="sub-logg">
+    <p class="count">__LOGG_STATUS__</p>
+    <button id="btn-historikk" style="margin-bottom:12px">📅 Vis historikk</button>
+    <button id="btn-visning" style="margin-bottom:12px">☰ Vis liste</button>
+    <div id="logg-galleri" class="ukjente-grid" style="display:none"></div>
+    <table id="logg-tabell" style="display:none">
+      <thead><tr><th>Dato</th><th>Tid</th><th>Skilt</th><th>Eier</th><th></th></tr></thead>
+      <tbody id="logg-tbody"></tbody>
+    </table>
+    <div id="logg-pagination"></div>
+  </div>
+
+  <div id="sub-kjente" class="hidden">
+    <p class="count">Rediger eller slett kjente biler</p>
+    <table>
+      <tr><th>Skilt</th><th>Eier</th><th>Handling</th></tr>
+      __KJENTE_ROWS__
+    </table>
+  </div>
+
+  <div id="sub-statistikk" class="hidden">
+    <div class="cards" style="margin-bottom:20px;">
+      <div class="card">
+        <h2>📊 Oversikt</h2>
+        <div class="stat-row"><span class="stat-label">Totale passeringer</span><span class="stat-value" id="stat-total">–</span></div>
+        <div class="stat-row"><span class="stat-label">Unike besøkende</span><span class="stat-value" id="stat-unike">–</span></div>
+        <div class="stat-row"><span class="stat-label">Ukjente passeringer</span><span class="stat-value" id="stat-ukjente">–</span></div>
+      </div>
+      <div class="card">
+        <h2>🏆 Topp 5 besøkende</h2>
+        <table><thead><tr><th>Skilt</th><th>Navn</th><th>Besøk</th><th>Sist</th><th>Frekvens</th><th>Tider</th></tr></thead>
+        <tbody id="stat-top5-body"></tbody></table>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h2>📅 Daglig trafikk – siste 10 dager</h2>
+      <canvas id="chart-daily" height="80"></canvas>
+    </div>
     <div class="cards" style="margin-bottom:16px;">
-      <div class="card">
-        <h2>🖥️ Server</h2>
-        <div class="stat-row"><span class="stat-label">Load (1/5/15 min)</span><span class="stat-value" id="stat-load">__STAT_LOAD__</span></div>
-        <div class="stat-row"><span class="stat-label">RAM</span><span class="stat-value" id="stat-ram">__STAT_RAM__</span></div>
-        <div class="progress-bar"><div class="progress-fill" id="bar-ram" style="width:__RAM_PCT__%"></div></div>
-        <div class="stat-row"><span class="stat-label">Disk</span><span class="stat-value" id="stat-disk">__STAT_DISK__</span></div>
-        <div class="progress-bar"><div class="progress-fill" id="bar-disk" style="width:__DISK_PCT__%"></div></div>
-      </div>
-      <div class="card">
-        <h2>🔗 Hurtiglenker</h2>
-        <div class="links">
-          <a href="__FRIGATE_URL__" target="_blank" class="link-btn">📹 Frigate</a>
-          <a href="__PORTAINER_URL__" target="_blank" class="link-btn">🐳 Portainer</a>
-        </div>
-      </div>
+      <div class="card"><h2>📆 Per ukedag</h2><canvas id="chart-weekday" height="120"></canvas></div>
+      <div class="card"><h2>🕐 Timefordeling</h2><canvas id="chart-hourly" height="120"></canvas></div>
     </div>
-
-    <div class="sub-tabs">
-      <button id="btn-sub-logg" class="sub-active" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
-      <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
-      <button id="btn-sub-statistikk" onclick="showSubTab('statistikk')">Statistikk</button>
-      <button id="btn-sub-innstillinger" onclick="showSubTab('innstillinger')">⚙️ Innstillinger</button>
-    </div>
-
-    <div id="sub-logg">
-      <p class="count">__LOGG_STATUS__</p>
-      <button id="btn-historikk" style="margin-bottom:12px">📅 Vis historikk</button>
-      <button id="btn-visning" style="margin-bottom:12px">☰ Vis liste</button>
-      <div id="logg-galleri" class="ukjente-grid" style="display:none"></div>
-      <table id="logg-tabell" style="display:none">
-        <thead><tr><th>Dato</th><th>Tid</th><th>Skilt</th><th>Eier</th><th></th></tr></thead>
-        <tbody id="logg-tbody"></tbody>
+    <div class="card" style="margin-bottom:16px;">
+      <h2>🚗 Alle kjøretøy</h2>
+      <table id="stat-alle-table">
+        <thead><tr>
+          <th onclick="sortAlle('plate')" style="cursor:pointer">Skilt ↕</th>
+          <th onclick="sortAlle('navn')" style="cursor:pointer">Navn ↕</th>
+          <th onclick="sortAlle('count')" style="cursor:pointer">Besøk ↕</th>
+          <th onclick="sortAlle('avg_days')" style="cursor:pointer">Frekvens ↕</th>
+          <th onclick="sortAlle('top_hours')" style="cursor:pointer">Vanligste tider ↕</th>
+        </tr></thead>
+        <tbody id="stat-alle-body"></tbody>
       </table>
-      <div id="logg-pagination"></div>
-    </div>
-
-    <div id="sub-kjente" class="hidden">
-      <p class="count">Rediger eller slett kjente biler</p>
-      <table>
-        <tr><th>Skilt</th><th>Eier</th><th>Handling</th></tr>
-        __KJENTE_ROWS__
-      </table>
-    </div>
-
-    <div id="sub-statistikk" class="hidden">
-      <div class="cards" style="margin-bottom:20px;">
-        <div class="card">
-          <h2>📊 Oversikt</h2>
-          <div class="stat-row"><span class="stat-label">Totale passeringer</span><span class="stat-value" id="stat-total">–</span></div>
-          <div class="stat-row"><span class="stat-label">Unike besøkende</span><span class="stat-value" id="stat-unike">–</span></div>
-          <div class="stat-row"><span class="stat-label">Ukjente passeringer</span><span class="stat-value" id="stat-ukjente">–</span></div>
-        </div>
-        <div class="card">
-          <h2>🏆 Topp 5 besøkende</h2>
-          <table><thead><tr><th>Skilt</th><th>Navn</th><th>Besøk</th><th>Sist</th><th>Frekvens</th><th>Tider</th></tr></thead>
-          <tbody id="stat-top5-body"></tbody></table>
-        </div>
-      </div>
-      <div class="card" style="margin-bottom:16px;">
-        <h2>📅 Daglig trafikk – siste 10 dager</h2>
-        <canvas id="chart-daily" height="80"></canvas>
-      </div>
-      <div class="cards" style="margin-bottom:16px;">
-        <div class="card"><h2>📆 Per ukedag</h2><canvas id="chart-weekday" height="120"></canvas></div>
-        <div class="card"><h2>🕐 Timefordeling</h2><canvas id="chart-hourly" height="120"></canvas></div>
-      </div>
-      <div class="card" style="margin-bottom:16px;">
-        <h2>🚗 Alle kjøretøy</h2>
-        <table id="stat-alle-table">
-          <thead><tr>
-            <th onclick="sortAlle('plate')" style="cursor:pointer">Skilt ↕</th>
-            <th onclick="sortAlle('navn')" style="cursor:pointer">Navn ↕</th>
-            <th onclick="sortAlle('count')" style="cursor:pointer">Besøk ↕</th>
-            <th onclick="sortAlle('avg_days')" style="cursor:pointer">Frekvens ↕</th>
-            <th onclick="sortAlle('top_hours')" style="cursor:pointer">Vanligste tider ↕</th>
-          </tr></thead>
-          <tbody id="stat-alle-body"></tbody>
-        </table>
-      </div>
-    </div>
-
-    <div id="sub-innstillinger" class="hidden">
-      <div id="lpr-settings-section" class="card" style="margin-bottom:16px;"><p class="no-data">Laster...</p></div>
-      <div id="cameras-section" class="card"><p class="no-data">Laster...</p></div>
     </div>
   </div>
 
-  <!-- DOK -->
-  <div id="dok" class="hidden">
-    <div id="docs-container"><p class="no-data">Laster dokumentasjon...</p></div>
-  </div>
-
-  <!-- INNSTILLINGER -->
-  <div id="innstillinger" class="hidden">
+  <div id="sub-innstillinger" class="hidden">
+    <div id="lpr-settings-section" class="card" style="margin-bottom:16px;"><p class="no-data">Laster...</p></div>
+    <div id="cameras-section" class="card" style="margin-bottom:16px;"><p class="no-data">Laster...</p></div>
     <div id="settings-container"><p class="no-data">Laster innstillinger...</p></div>
+  </div>
+
+  <div id="sub-dok" class="hidden">
+    <div id="docs-container"><p class="no-data">Laster dokumentasjon...</p></div>
   </div>
 
   <div id="lightbox" class="lightbox" onclick="closeLightbox()">

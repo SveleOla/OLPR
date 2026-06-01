@@ -22,23 +22,7 @@ function showSubTab(name) {
 }
 
 function showTab(name) {
-  ['skiltgjenkjenning','innstillinger','dok'].forEach(t => {
-    document.getElementById(t).classList.add('hidden');
-    document.getElementById('btn-' + t).classList.remove('active');
-  });
-  // Tilbakestill underfaner når vi forlater skiltgjenkjenning
-  ['logg','kjente','statistikk','innstillinger'].forEach(t => {
-    const el = document.getElementById('sub-' + t);
-    if (el) el.classList.add('hidden');
-  });
-  document.getElementById(name).classList.remove('hidden');
-  document.getElementById('btn-' + name).classList.add('active');
-  const _url = new URL(window.location);
-  _url.searchParams.set('tab', name);
-  history.replaceState(null, '', _url);
-  if (name === 'skiltgjenkjenning') showSubTab('logg');
-  if (name === 'innstillinger') { if (typeof loadSettingsPage === 'function') loadSettingsPage(); }
-  if (name === 'dok') { if (typeof loadDocs === 'function') loadDocs(); }
+  showSubTab(name);
 }
 
 const params  = new URLSearchParams(window.location.search);
