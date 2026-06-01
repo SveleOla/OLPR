@@ -19,12 +19,7 @@ const API_ENDPOINTS = [
   { method: 'GET',  path: '/api/ukjente/slett',         desc: 'Slett ukjent kjøretøy (?id=)' },
   { method: 'GET',  path: '/api/events24h',             desc: 'Alle bil-events siste 24 timer' },
   { method: 'GET',  path: '/api/statistikk',            desc: 'Besøksstatistikk' },
-  { method: 'GET',  path: '/api/weather',               desc: 'Værdata (?range=3h|1d|7d)' },
-  { method: 'GET',  path: '/api/storm',                 desc: 'Stormvarsel-status' },
-  { method: 'GET',  path: '/api/ludvig',                desc: 'Vekningsdata' },
-  { method: 'GET',  path: '/api/borte',                 desc: 'Bortemodus-status' },
-  { method: 'POST', path: '/api/borte/toggle',          desc: 'Bytt automatikk på/av' },
-  { method: 'POST', path: '/api/borte/reset',           desc: 'Nullstill sist kjørt' },
+
   { method: 'GET',  path: '/api/frigate_snapshot/:id',  desc: 'Proxy Frigate snapshot' },
   { method: 'GET',  path: '/snapshot/:filnavn',         desc: 'Server lokalt snapshot' },
   { method: 'GET',  path: '/api/docs',                  desc: 'Denne dokumentasjonen' },
@@ -35,7 +30,7 @@ const PIPELINE_STEPS = [
   { icon: '📸', title: 'Snapshot',             desc: 'go2rtc-frame captures 1 sekund etter deteksjon mens bilen er godt synlig.' },
   { icon: '🔢', title: 'Stemme-innsamling',   desc: 'Frigate sender LPR-lesinger via MQTT. Stemmer samles i 1.5 sekunder.' },
   { icon: '🏆', title: 'Vinner velges',        desc: '≥80% konfidens → Frigate-lesing brukes direkte. <80% → GPT-4o verifiserer.' },
-  { icon: '📡', title: 'MQTT publisering',     desc: 'Skilt og eier publiseres til loxone/{kamera}/resultat (QoS 1, retain). Blankes etter 5 sek.' },
+  { icon: '📡', title: 'MQTT publisering',     desc: 'Skilt og eier publiseres til konfigurerbart MQTT-topic (QoS 1, retain). Blankes etter reset_seconds.' },
   { icon: '🗄️', title: 'Database',            desc: 'Ukjente biler lagres med snapshot, kilde og frigate_plate for sporbarhet.' },
 ];
 
