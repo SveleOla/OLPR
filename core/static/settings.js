@@ -9,22 +9,16 @@ const SETTINGS_SCHEMA = [
         tip: 'Nettadressen til Frigate NVR-grensesnittet.' },
       { key: 'portainer_url', label: 'Portainer URL', type: 'text',
         tip: 'Nettadressen til Portainer Docker-administrasjon.' },
-      { key: 'pihole_url', label: 'Pi-hole URL', type: 'text',
-        tip: 'Nettadressen til Pi-hole DNS-administrasjon.' },
     ]
   },
   {
-    key: 'ludvig', label: 'Ludvig', icon: '👶',
-    restart: 'ludvig-bridge', restartLabel: 'Lagre & restart Ludvig-bridge',
+    key: 'mqtt', label: 'MQTT', icon: '📡',
+    restart: 'lpr-bridge', restartLabel: 'Lagre & restart LPR-bridge',
     fields: [
-      { key: 'trigger_count', label: 'Antall triggere', type: 'number', min: 1, max: 10, step: 1,
-        tip: 'Antall MQTT-signaler innenfor tidsvinduet som kreves for å registrere en vekking.' },
-      { key: 'trigger_window_sec', label: 'Trigger-vindu (sek)', type: 'number', min: 60, max: 3600, step: 60,
-        tip: 'Tidsvindu i sekunder der triggere telles.' },
-      { key: 'cooldown_sec', label: 'Cooldown (sek)', type: 'number', min: 60, max: 7200, step: 60,
-        tip: 'Ventetid etter registrert vekking før nye triggere telles.' },
-      { key: 'retain_days', label: 'Logg-retensjon (dager)', type: 'number', min: 7, max: 365, step: 1,
-        tip: 'Antall dager vekningslogg lagres.' },
+      { key: 'result_topic', label: 'Resultat-topic', type: 'text',
+        tip: 'MQTT-topic for kjøretøynavn. Bruk {camera} som plassholder.' },
+      { key: 'plate_topic', label: 'Skilt-topic', type: 'text',
+        tip: 'MQTT-topic for skiltnummer. Bruk {camera} som plassholder.' },
     ]
   },
   {
@@ -35,8 +29,6 @@ const SETTINGS_SCHEMA = [
         tip: 'Maks antall linjer som vises i LPR-loggen.' },
       { key: 'stats_refresh_sec', label: 'Server-refresh (sek)', type: 'number', min: 5, max: 60, step: 5,
         tip: 'Hvor ofte server-statistikk oppdateres. Trer i kraft ved neste sideinnlasting.' },
-      { key: 'storm_refresh_sec', label: 'Storm-refresh (sek)', type: 'number', min: 1, max: 30, step: 1,
-        tip: 'Hvor ofte stormvarsel-statusen sjekkes. Trer i kraft ved neste sideinnlasting.' },
     ]
   }
 ];
