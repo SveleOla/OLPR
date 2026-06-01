@@ -32,16 +32,11 @@ function showTab(name) {
 }
 
 const params  = new URLSearchParams(window.location.search);
-const initTab = params.get('tab');
-const initSub = params.get('sub') || 'logg';
-if (initTab && ['skiltgjenkjenning','innstillinger','dok'].includes(initTab)) {
-  window.addEventListener('DOMContentLoaded', () => {
-    showTab(initTab);
-    if (initTab === 'skiltgjenkjenning') showSubTab(initSub);
-  });
-} else {
-  window.addEventListener('DOMContentLoaded', () => showSubTab('statistikk'));
-}
+const initSub = params.get('sub') || 'statistikk';
+const validSubs = ['logg','kjente','statistikk','innstillinger','dok'];
+window.addEventListener('DOMContentLoaded', () => {
+  showSubTab(validSubs.includes(initSub) ? initSub : 'statistikk');
+});
 
 const showAll = params.get('all') === '1';
 setInterval(() => {
