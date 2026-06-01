@@ -865,7 +865,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({'ok': True, 'message': 'Restarter alle tjenester...'})
             return
 
-       if self.path == '/api/cameras':
+        if self.path == '/api/cameras':
             try:
                 cameras = json.loads(raw_body)
                 s = load_settings()
