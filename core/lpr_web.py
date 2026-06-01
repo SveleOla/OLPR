@@ -64,6 +64,122 @@ def save_settings_file(data):
     with open(SETTINGS_FILE, 'w') as f:
         json.dump(filter_none(data), f, indent=2)
 
+def generate_frigate_config(cameras):
+    """Generer frigate/config.yml fra cameras-lista i settings.json."""
+    import os as _os
+    config_path = _os.path.join(_os.path.dirname(BASE_DIR), 'core', 'frigate', 'config.yml')
+    
+    go2rtc_streams = {}
+    cam_configs = {}
+    
+    for cam in cameras:
+        name   = cam.get('name', '')
+        ip     = cam.get('ip', '')
+        user   = cam.get('username', 'admin')
+        pwd    = cam.get('password', '')
+        path   = cam.get('rtsp_path', '/Streaming/Channels/101')
+        sub    = cam.get('rtsp_path_sub', '/Streaming/Channels/102')
+        width  = cam.get('width', 640)
+        height = cam.get('height', 360)
+        fps    = cam.get('fps', 5)
+        lpr    = cam.get('lpr', False)
+        objects = cam.get('objects', ['car'])
+        
+        if not name or not ip:
+            continue
+        
+        rtsp_main = f"rtsp://{user}:{pwd}@{ip}:554{path}"
+        rtsp_sub  = f"rtsp://{user}:{pwd}@{ip}:554{sub}"
+        
+        go2rtc_streams[name]          = [rtsp_main]
+        go2rtc_streams[f"{name}_sub"] = [rtsp_sub]
+        
+        snap_block = ""
+        if lpr:
+            snap_block = f"""    snapshots:
+      enabled: true
+      retain:
+        default: 30
+"""
+        
+        cam_configs[name] = f"""{snap_block}    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/{name}_sub
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/{name}
+          roles: [record]
+    detect:
+      enabled: true
+      width: {width}
+      height: {height}
+      fps: {fps}
+    objects:
+      track: {json.dumps(objects)}
+    record:
+      enabled: true"""
+    
+    streams_yaml = ""
+    for sname, surls in go2rtc_streams.items():
+        streams_yaml += f"    {sname}:\n"
+        for url in surls:
+            streams_yaml += f"      - {url}\n"
+    
+    cams_yaml = ""
+    for cname, cblock in cam_configs.items():
+        cams_yaml += f"  {cname}:\n{cblock}\n\n"
+    
+    config = f"""mqtt:
+  host: 127.0.0.1
+  port: 1883
+
+detectors:
+  coral:
+    type: edgetpu
+    device: usb
+
+ffmpeg:
+  hwaccel_args: preset-vaapi
+
+lpr:
+  enabled: true
+  model_size: small
+  min_area: 1000
+  min_plate_length: 5
+  recognition_threshold: 0.85
+
+go2rtc:
+  streams:
+{streams_yaml}
+cameras:
+{cams_yaml}
+record:
+  enabled: true
+  alerts:
+    retain:
+      days: 14
+  detections:
+    retain:
+      days: 14
+  motion:
+    days: 14
+
+version: 0.17-0
+
+logger:
+  default: info
+  logs:
+    frigate.data_processing.common.license_plate: debug
+"""
+    
+    try:
+        with open(config_path, 'w') as f:
+            f.write(config)
+        log.info(f"Frigate config generert: {config_path}")
+        return True
+    except Exception as e:
+        log.warning(f"generate_frigate_config feilet: {e}")
+        return False
+
 def restart_service(name):
     try:
         subprocess.run(['systemctl', 'restart', name], timeout=15, check=True)
@@ -749,12 +865,13 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json({'ok': True, 'message': 'Restarter alle tjenester...'})
             return
 
-        if self.path == '/api/cameras':
+       if self.path == '/api/cameras':
             try:
                 cameras = json.loads(raw_body)
                 s = load_settings()
                 s['cameras'] = cameras
                 save_settings_file(s)
+                generate_frigate_config(cameras)
                 restart_service('lpr-bridge')
                 self.send_json({'ok': True, 'restarted': ['lpr-bridge']})
             except Exception as e:
