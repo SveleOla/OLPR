@@ -136,8 +136,8 @@ function renderCameras() {
       </div>
       ${cam.lpr ? `<div class="cam-mqtt">
         <span class="cam-mqtt-label">MQTT</span>
-        <code class="cam-mqtt-topic">loxone/${cam.name}/resultat</code>
-        <button class="cam-copy-btn" onclick="copyTopic('loxone/${cam.name}/resultat', this)" title="Kopier">📋</button>
+        <code class="cam-mqtt-topic">lpr/${cam.name}/resultat</code>
+        <button class="cam-copy-btn" onclick="copyTopic('lpr/${cam.name}/resultat', this)" title="Kopier">📋</button>
       </div>` : ''}
       <div class="camera-actions">
         <button onclick="testCamera(${i})">Test</button>
