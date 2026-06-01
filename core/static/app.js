@@ -45,7 +45,7 @@ if (initTab && ['skiltgjenkjenning','innstillinger','dok'].includes(initTab)) {
 
 const showAll = params.get('all') === '1';
 setInterval(() => {
-  const onLogg = document.getElementById('sub-logg') && !document.getElementById('sub-logg').classList.contains('hidden') && !document.getElementById('skiltgjenkjenning').classList.contains('hidden');
+  const onLogg = document.getElementById('sub-logg') && !document.getElementById('sub-logg').classList.contains('hidden');
   if (onLogg && !showAll && !document.querySelector('input:focus')) {
     if (typeof updateLogg === 'function') updateLogg();
   }
