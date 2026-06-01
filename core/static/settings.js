@@ -1,5 +1,15 @@
 const SETTINGS_SCHEMA = [
   {
+    key: 'auth', label: 'Innlogging', icon: '🔒',
+    restart: null, restartLabel: 'Lagre',
+    fields: [
+      { key: 'username', label: 'Brukernavn', type: 'text',
+        tip: 'Brukernavn for innlogging på dashboardet.' },
+      { key: 'password', label: 'Passord', type: 'password',
+        tip: 'Passord for innlogging på dashboardet.' },
+    ]
+  },
+  {
     key: 'system', label: 'System', icon: '🏠',
     restart: null, restartLabel: 'Lagre',
     fields: [
