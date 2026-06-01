@@ -7,13 +7,10 @@
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-  <script src="/static/weather.js" defer></script>
-  <script src="/static/ludvig.js" defer></script>
   <script src="/static/ukjente.js" defer></script>
   <script src="/static/logg.js"></script>
   <script src="/static/events.js" defer></script>
   <script src="/static/statistikk.js" defer></script>
-  <script src="/static/borte.js" defer></script>
   <script src="/static/settings.js" defer></script>
   <script src="/static/skilt_settings.js" defer></script>
   <script src="/static/docs.js" defer></script>
@@ -21,17 +18,14 @@
 <body>
   <h1>__SYSTEM_NAME__</h1>
   <div class="tabs">
-    <button id="btn-dashboard" class="active" onclick="showTab('dashboard')">Dashboard</button>
-    <button id="btn-skiltgjenkjenning" onclick="showTab('skiltgjenkjenning')">Skiltgjenkjenning</button>
-    <button id="btn-ludvig" onclick="showTab('ludvig')">Ludvig</button>
+    <button id="btn-skiltgjenkjenning" class="active" onclick="showTab('skiltgjenkjenning')">Skiltgjenkjenning</button>
     <button id="btn-innstillinger" onclick="showTab('innstillinger')">⚙️ Innstillinger</button>
     <button id="btn-dok" onclick="showTab('dok')">📖 Dok</button>
   </div>
 
-  <!-- DASHBOARD -->
-  <div id="dashboard">
-    <div id="storm-banner" class="storm-banner">⚠️ Stormvarsel aktivt</div>
-    <div class="cards">
+  <!-- SERVER STATUS -->
+  <div id="skiltgjenkjenning">
+    <div class="cards" style="margin-bottom:16px;">
       <div class="card">
         <h2>🖥️ Server</h2>
         <div class="stat-row"><span class="stat-label">Load (1/5/15 min)</span><span class="stat-value" id="stat-load">__STAT_LOAD__</span></div>
@@ -45,60 +39,10 @@
         <div class="links">
           <a href="__FRIGATE_URL__" target="_blank" class="link-btn">📹 Frigate</a>
           <a href="__PORTAINER_URL__" target="_blank" class="link-btn">🐳 Portainer</a>
-          <a href="__PIHOLE_URL__" target="_blank" class="link-btn">🛡️ Pi-hole</a>
         </div>
       </div>
     </div>
-    <div class="card weather-card">
-      <div class="weather-header">
-        <h2>🌡️ Vær</h2>
-        <div class="range-btns">
-          <button class="range-btn range-active" id="btn-3h" onclick="loadWeather('3h')">3t</button>
-          <button class="range-btn" id="btn-1d" onclick="loadWeather('1d')">1 dag</button>
-          <button class="range-btn" id="btn-7d" onclick="loadWeather('7d')">7 dager</button>
-        </div>
-      </div>
-      <div class="weather-charts" id="weather-charts"><p class="no-data">Laster værdata...</p></div>
-      <div class="weather-now" id="weather-now"></div>
-    </div>
-    <div class="card" style="margin-bottom:16px;" id="tts-card">
-      <h2>🔊 TTS-varsling</h2>
-      <div class="stat-row">
-        <span class="stat-label">Aktivert</span>
-        <span class="stat-value"><label class="toggle-label"><input type="checkbox" id="tts-enabled" onchange="ttsToggle(this)"><span class="toggle-slider"></span></label></span>
-      </div>
-      <div id="tts-zones" style="opacity:0.4;pointer-events:none">
-        <div class="stat-row">
-          <span class="stat-label">Gang</span>
-          <span class="stat-value"><label class="toggle-label"><input type="checkbox" id="tts-gang"><span class="toggle-slider"></span></label></span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Stue</span>
-          <span class="stat-value"><label class="toggle-label"><input type="checkbox" id="tts-stue"><span class="toggle-slider"></span></label></span>
-        </div>
-      </div>
-      <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
-        <button onclick="saveTTS()">Lagre</button>
-        <button onclick="testTTS()">🔊 Test</button>
-        <span id="tts-status" class="settings-status"></span>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <h2>🏠 Bortemodus & støvsuger</h2>
-      <div class="stat-row"><span class="stat-label">Bortemodus</span><span class="stat-value" id="borte-status">–</span></div>
-      <div class="stat-row"><span class="stat-label">Automatikk</span><span class="stat-value" id="borte-auto">–</span></div>
-      <div class="stat-row"><span class="stat-label">Støvsuger</span><span class="stat-value" id="borte-vakuum-status">–</span></div>
-      <div class="stat-row"><span class="stat-label">Sist kjørt</span><span class="stat-value" id="borte-sist-kjort">–</span></div>
-      <div class="stat-row"><span class="stat-label">Daglig kjøring</span><span class="stat-value" id="borte-blokkert">–</span></div>
-      <div style="margin-top:14px;display:flex;gap:8px;">
-        <button id="borte-toggle" onclick="toggleAutomatikk()">–</button>
-        <button id="borte-reset" onclick="resetBorte()">Nullstill kjørt i dag</button>
-      </div>
-    </div>
-  </div>
 
-  <!-- SKILTGJENKJENNING -->
-  <div id="skiltgjenkjenning" class="hidden">
     <div class="sub-tabs">
       <button id="btn-sub-logg" class="sub-active" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
       <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
@@ -161,11 +105,6 @@
           <tbody id="stat-alle-body"></tbody>
         </table>
       </div>
-      <div class="card" style="margin-top:16px;">
-        <h2>🏠 Hjemmebiler</h2>
-        <table><thead><tr><th>Skilt</th><th>Navn</th><th>Passeringer</th><th>Frekvens</th><th>Vanligste tider</th></tr></thead>
-        <tbody id="stat-hjemme-body"></tbody></table>
-      </div>
     </div>
 
     <div id="sub-innstillinger" class="hidden">
@@ -174,31 +113,12 @@
     </div>
   </div>
 
-  <!-- LUDVIG -->
-  <div id="ludvig" class="hidden">
-    <div class="lud-stats">
-      <div class="lud-stat"><div class="lud-stat-label">Snitt per natt</div><div class="lud-stat-value" id="lud-avg">–</div></div>
-      <div class="lud-stat"><div class="lud-stat-label">Tidligste vekking</div><div class="lud-stat-value" id="lud-first">–</div></div>
-      <div class="lud-stat"><div class="lud-stat-label">Seneste vekking</div><div class="lud-stat-value" id="lud-last">–</div></div>
-      <div class="lud-stat"><div class="lud-stat-label">Uroligste natt</div><div class="lud-stat-value" id="lud-worst">–</div></div>
-      <div class="lud-stat"><div class="lud-stat-label">Roligste natt</div><div class="lud-stat-value" id="lud-calm">–</div></div>
-    </div>
-    <div class="card" style="margin-bottom:20px; padding-bottom:8px;">
-      <h2 style="margin-bottom:16px;">Vekninger – siste 3 døgn</h2>
-      <div id="ludvig-timeline"><p class="no-data">Laster...</p></div>
-    </div>
-    <table>
-      <tr><th>Dato</th><th>Tidspunkt</th></tr>
-      <tbody id="ludvig-log-body"><tr><td colspan="2" style="color:#666;text-align:center;">Laster...</td></tr></tbody>
-    </table>
-  </div>
-
   <!-- DOK -->
   <div id="dok" class="hidden">
     <div id="docs-container"><p class="no-data">Laster dokumentasjon...</p></div>
   </div>
 
-  <!-- INNSTILLINGER (topp-nivå: Ludvig + Dashboard) -->
+  <!-- INNSTILLINGER -->
   <div id="innstillinger" class="hidden">
     <div id="settings-container"><p class="no-data">Laster innstillinger...</p></div>
   </div>
