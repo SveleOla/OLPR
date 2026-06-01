@@ -22,7 +22,7 @@ function showSubTab(name) {
 }
 
 function showTab(name) {
-  ['dashboard','skiltgjenkjenning','ludvig','innstillinger','dok'].forEach(t => {
+  ['skiltgjenkjenning','innstillinger','dok'].forEach(t => {
     document.getElementById(t).classList.add('hidden');
     document.getElementById('btn-' + t).classList.remove('active');
   });
@@ -44,7 +44,7 @@ function showTab(name) {
 const params  = new URLSearchParams(window.location.search);
 const initTab = params.get('tab');
 const initSub = params.get('sub') || 'logg';
-if (initTab && ['dashboard','skiltgjenkjenning','ludvig','innstillinger','dok'].includes(initTab)) {
+if (initTab && ['skiltgjenkjenning','innstillinger','dok'].includes(initTab)) {
   window.addEventListener('DOMContentLoaded', () => {
     showTab(initTab);
     if (initTab === 'skiltgjenkjenning') showSubTab(initSub);
