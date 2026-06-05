@@ -31,7 +31,6 @@ MQTT_PORT      = 1883
 WAIT_SECONDS   = 30
 RESET_SECONDS  = 5
 COMMIT_WINDOW  = 1.5
-SNAPSHOT_DELAY = 1.0
 KONF_TERSKEL   = 0.8
 GPT_ENABLED    = False
 PRUNE_DAYS     = 30
@@ -83,7 +82,6 @@ _s             = _load_settings()
 WAIT_SECONDS   = _s.get('wait_seconds',          WAIT_SECONDS)
 RESET_SECONDS  = _s.get('reset_seconds',          RESET_SECONDS)
 COMMIT_WINDOW  = _s.get('commit_window',          COMMIT_WINDOW)
-SNAPSHOT_DELAY = _s.get('snapshot_delay',         SNAPSHOT_DELAY)
 KONF_TERSKEL   = _s.get('confidence_threshold',   KONF_TERSKEL)
 GPT_ENABLED    = _s.get('gpt_enabled',            GPT_ENABLED)
 PRUNE_DAYS     = _s.get('snapshot_retention_days', PRUNE_DAYS)
@@ -102,8 +100,6 @@ cache_lock = threading.Lock()
 cam_pending_timer    = {c: None for c in LPR_CAMERAS}
 cam_pending_event_id = {c: None for c in LPR_CAMERAS}
 cam_lpr_collection   = {c: {} for c in LPR_CAMERAS}
-cam_lpr_frames       = {c: {} for c in LPR_CAMERAS}
-cam_event_frames     = {c: {} for c in LPR_CAMERAS}
 cam_snapshot_cache   = {c: {} for c in LPR_CAMERAS}
 
 
@@ -317,15 +313,8 @@ def schedule_reset(client, camera):
     t.start()
 
 
-def _behandle_plate(client, plate, eid, camera, preframe=None):
+def _behandle_plate(client, plate, eid, camera):
     tidspunkt = now()
-    live_frame = preframe
-    if not live_frame:
-        try:
-            _r = requests.get(f"http://127.0.0.1:1984/api/frame.jpeg?src={camera}", timeout=3)
-            live_frame = _r.content if _r.status_code == 200 and len(_r.content) > 1000 else None
-        except Exception:
-            live_frame = None
     logg_til_db(tidspunkt, plate, camera)
     log.info(f"Skilt bekreftet: {plate} ({camera})")
     kjente = load_kjente_skilt()
@@ -358,16 +347,12 @@ def _behandle_plate(client, plate, eid, camera, preframe=None):
         threading.Thread(target=_gpt_verify, daemon=True).start()
 
     def lagre():
-        if live_frame:
-            ts = tidspunkt.replace(':', '-').replace(' ', '_')
-            fp = os.path.join(SNAPSHOT_DIR, f"{ts}_{plate}.jpg")
-            with open(fp, 'wb') as f:
-                f.write(live_frame)
-            path = fp
-        else:
-            path = hent_snapshot(eid, tidspunkt, prefiks=plate)
+        import time as _t
+        _t.sleep(5)
+        path = hent_snapshot(eid, tidspunkt, prefiks=plate)
         kilde = "frigate" if navn == "ukjent" else "kjent"
         lagre_i_db(plate, eid, tidspunkt, path, kilde=kilde, camera=camera)
+        log.info(f"Frigate snapshot lagret: {path}")
     threading.Thread(target=lagre, daemon=True).start()
 
 
@@ -435,20 +420,6 @@ def on_event_new(client, event_id, label, camera):
         t.start()
         cam_pending_timer[camera] = t
 
-    def capture_delayed():
-        import time as _t
-        _t.sleep(SNAPSHOT_DELAY)
-        if event_id not in cam_event_frames.get(camera, {}):
-            try:
-                _fr = requests.get(f"http://127.0.0.1:1984/api/frame.jpeg?src={camera}", timeout=5)
-                if _fr.status_code == 200 and len(_fr.content) > 1000:
-                    cam_event_frames.setdefault(camera, {})[event_id] = _fr.content
-                    cam_lpr_frames.setdefault(camera, {})[event_id]   = _fr.content
-                else:
-                    log.warning(f"Delayed frame feilet: HTTP {_fr.status_code}")
-            except Exception as e:
-                log.warning(f"Delayed frame exception: {e}")
-    threading.Thread(target=capture_delayed, daemon=True).start()
 
 
 def on_event_end(client, event_id, camera):
@@ -457,8 +428,6 @@ def on_event_end(client, event_id, camera):
     log.info(f"Event {event_id}: avsluttet ({camera})")
     with state_lock:
         cam_lpr_collection.get(camera, {}).pop(event_id, None)
-        cam_lpr_frames.get(camera, {}).pop(event_id, None)
-        cam_event_frames.get(camera, {}).pop(event_id, None)
     client.publish(_get_mqtt_topic('plate_topic', camera), "", retain=True)
     with state_lock:
         still_pending = (cam_pending_event_id.get(camera) == event_id)
@@ -493,14 +462,6 @@ def on_lpr(client, plate_raw, camera):
     if old_timer:
         old_timer.cancel()
 
-    if first_vote and eid not in cam_lpr_frames.get(camera, {}):
-        try:
-            _fr = requests.get(f"http://127.0.0.1:1984/api/frame.jpeg?src={camera}", timeout=2)
-            if _fr.status_code == 200 and len(_fr.content) > 1000:
-                cam_lpr_frames.setdefault(camera, {})[eid] = _fr.content
-        except Exception as e:
-            log.warning(f"Første-stemme frame exception: {e}")
-
     def commit():
         with state_lock:
             col = cam_lpr_collection.get(camera, {}).pop(eid, None)
@@ -516,12 +477,11 @@ def on_lpr(client, plate_raw, camera):
         best  = col['votes'].count(vinner)
         konf  = best / total
         log.info(f"LPR vinner: {vinner} ({best}/{total} stemmer, konfidens {konf:.0%}) ({camera})")
-        preframe = cam_lpr_frames.get(camera, {}).pop(eid, None)
         if konf >= KONF_TERSKEL:
-            _behandle_plate(client, vinner, eid, camera, preframe=preframe)
+            _behandle_plate(client, vinner, eid, camera)
         else:
             if not camera_gpt_enabled(camera):
-                _behandle_plate(client, vinner, eid, camera, preframe=preframe)
+                _behandle_plate(client, vinner, eid, camera)
                 return
             log.info(f"Lav konfidens ({konf:.0%}), sender til GPT-fallback ({camera})")
             threading.Thread(target=gpt_fallback, args=(client, eid, camera, vinner),

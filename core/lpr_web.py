@@ -35,7 +35,7 @@ MAX_LINES         = 2000
 
 SETTINGS_DEFAULTS = {
     "lpr":    {"confidence_threshold": 0.8, "gpt_enabled": False, "wait_seconds": 30,
-               "reset_seconds": 5, "commit_window": 1.5, "snapshot_delay": 1.0,
+               "reset_seconds": 5, "commit_window": 1.5,
                "snapshot_retention_days": 30},
     "web":    {"max_log_lines": 2000, "stats_refresh_sec": 15},
     "system": {"name": "OLPR", "frigate_url": "http://localhost:5000",
@@ -123,7 +123,8 @@ def generate_frigate_config(cameras):
         
         snap_block = ""
         if lpr:
-            snap_block = f"""    snapshots:
+            snap_block = f"""    type: lpr
+    snapshots:
       enabled: true
       retain:
         default: 30
