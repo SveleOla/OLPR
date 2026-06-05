@@ -21,8 +21,6 @@ const LPR_SCHEMA = {
       tip: 'Antall sekunder etter publisering før MQTT-topicen nullstilles.' },
     { key: 'commit_window', label: 'Commit-vindu (sek)', type: 'number', min: 0.5, max: 5.0, step: 0.5,
       tip: 'Antall sekunder å vente på flere stemmer etter siste LPR-lesing.' },
-    { key: 'snapshot_delay', label: 'Snapshot-forsinkelse (sek)', type: 'number', min: 0.5, max: 5.0, step: 0.5,
-      tip: 'Antall sekunder etter bildeteksjon før snapshot tas.' },
     { key: 'snapshot_retention_days', label: 'Snapshot-retensjon (dager)', type: 'number', min: 7, max: 365, step: 1,
       tip: 'Antall dager snapshots lagres på disk.' },
   ]

@@ -120,7 +120,6 @@ function renderDocs(d) {
     ['Ventetid', lpr.wait_seconds + 's'],
     ['Reset-tid', lpr.reset_seconds + 's'],
     ['Commit-vindu', lpr.commit_window + 's'],
-    ['Snapshot-forsinkelse', lpr.snapshot_delay + 's'],
     ['Snapshot-retensjon', lpr.snapshot_retention_days + ' dager'],
     ['MQTT host', lpr.mqtt_host + ':' + lpr.mqtt_port],
   ].map(([k, v]) => `<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('');
