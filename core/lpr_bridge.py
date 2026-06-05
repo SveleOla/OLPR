@@ -101,6 +101,7 @@ cam_pending_timer    = {c: None for c in LPR_CAMERAS}
 cam_pending_event_id = {c: None for c in LPR_CAMERAS}
 cam_lpr_collection   = {c: {} for c in LPR_CAMERAS}
 cam_snapshot_cache   = {c: {} for c in LPR_CAMERAS}
+cam_lpr_event_id     = {c: None for c in LPR_CAMERAS}
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -313,8 +314,9 @@ def schedule_reset(client, camera):
     t.start()
 
 
-def _behandle_plate(client, plate, eid, camera):
+def _behandle_plate(client, plate, eid, camera, snap_eid=None):
     tidspunkt = now()
+    snap_eid = snap_eid or eid
     logg_til_db(tidspunkt, plate, camera)
     log.info(f"Skilt bekreftet: {plate} ({camera})")
     kjente = load_kjente_skilt()
@@ -349,10 +351,10 @@ def _behandle_plate(client, plate, eid, camera):
     def lagre():
         import time as _t
         _t.sleep(5)
-        path = hent_snapshot(eid, tidspunkt, prefiks=plate)
+        path = hent_snapshot(snap_eid, tidspunkt, prefiks=plate)
         kilde = "frigate" if navn == "ukjent" else "kjent"
         lagre_i_db(plate, eid, tidspunkt, path, kilde=kilde, camera=camera)
-        log.info(f"Frigate snapshot lagret: {path}")
+        log.info(f"Frigate snapshot lagret: {path} (lpr_event: {snap_eid})")
     threading.Thread(target=lagre, daemon=True).start()
 
 
@@ -435,7 +437,7 @@ def on_event_end(client, event_id, camera):
         threading.Thread(target=prefetch_snapshot, args=(event_id, camera), daemon=True).start()
 
 
-def on_lpr(client, plate_raw, camera):
+def on_lpr(client, plate_raw, camera, lpr_event_id=''):
     if camera not in LPR_CAMERAS:
         return
     match = PLATE_REGEX.search(plate_raw or "")
@@ -446,6 +448,8 @@ def on_lpr(client, plate_raw, camera):
     old_timer = None
     with state_lock:
         eid = cam_pending_event_id.get(camera)
+        if lpr_event_id:
+            cam_lpr_event_id[camera] = lpr_event_id
         if not eid:
             return
         cam_lpr_collection.setdefault(camera, {})
@@ -477,11 +481,13 @@ def on_lpr(client, plate_raw, camera):
         best  = col['votes'].count(vinner)
         konf  = best / total
         log.info(f"LPR vinner: {vinner} ({best}/{total} stemmer, konfidens {konf:.0%}) ({camera})")
+        snap_eid = cam_lpr_event_id.get(camera) or eid
+        cam_lpr_event_id[camera] = None
         if konf >= KONF_TERSKEL:
-            _behandle_plate(client, vinner, eid, camera)
+            _behandle_plate(client, vinner, eid, camera, snap_eid)
         else:
             if not camera_gpt_enabled(camera):
-                _behandle_plate(client, vinner, eid, camera)
+                _behandle_plate(client, vinner, eid, camera, snap_eid)
                 return
             log.info(f"Lav konfidens ({konf:.0%}), sender til GPT-fallback ({camera})")
             threading.Thread(target=gpt_fallback, args=(client, eid, camera, vinner),
@@ -518,7 +524,7 @@ def on_message(client, userdata, msg):
     elif msg.topic == "frigate/tracked_object_update":
         if payload.get('type') == 'lpr':
             camera = payload.get('camera', '')
-            on_lpr(client, payload.get('plate', ''), camera)
+            on_lpr(client, payload.get('plate', ''), camera, payload.get('id', ''))
 
 
 def on_connect(client, userdata, flags, rc, *args):
