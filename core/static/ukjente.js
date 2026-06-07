@@ -66,15 +66,17 @@ function leggTilKjent(plate, id) {
   const nameEl = document.getElementById('name-' + id);
   const name   = nameEl?.value?.trim();
   if (!name) return;
-  fetch('/', {
+  fetch('/api/kjente', {
     method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `action=add&plate=${encodeURIComponent(plate)}&name=${encodeURIComponent(name)}`,
-    redirect: 'manual'
-  }).then(() => {
-    document.getElementById('add-' + id).innerHTML =
-      '<span style="color:#80c880">✅ Lagt til i kjente biler</span>';
-    setTimeout(updateEvents24h, 500);
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'add', plate, name})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      document.getElementById('add-' + id).innerHTML =
+        '<span style="color:#80c880">✅ Lagt til i kjente biler</span>';
+      setTimeout(updateEvents24h, 500);
+      if (typeof updateKjenteBiler === 'function') updateKjenteBiler();
+    }
   }).catch(() => {});
 }
 

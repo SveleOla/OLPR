@@ -663,6 +663,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.end_headers()
             return
 
+        if parsed.path == '/api/kjente':
+            skilt = load_skilt()
+            data = [{'plate': p, 'name': n} for p, n in sorted(skilt.items(), key=lambda x: x[1].lower())]
+            self.send_json(data)
+            return
+
         if parsed.path == '/api/ukjente':
             qs2  = parse_qs(parsed.query)
             all_ = qs2.get('all', ['0'])[0] == '1'
@@ -901,7 +907,7 @@ class Handler(BaseHTTPRequestHandler):
             '__DISK_PCT__':     str(stats['disk_pct']),
             '__LOGG_STATUS__':  logg_status,
             '__LOG_ROWS__':     '',
-            '__KJENTE_ROWS__':  kjente_rows,
+            '__KJENTE_ROWS__':  '',
         })
         self.send_html(page)
 
@@ -941,6 +947,28 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(303)
             self.send_header('Location', '/login')
             self.end_headers()
+            return
+
+        if self.path == '/api/kjente':
+            try:
+                action = post_params.get('action', '')
+                plate  = post_params.get('plate', '').strip().upper()
+                name   = post_params.get('name', '').strip()
+                skilt  = load_skilt()
+                if action == 'add' and plate and name:
+                    skilt[plate] = name
+                    save_skilt(skilt)
+                elif action == 'edit' and plate and name:
+                    skilt[plate] = name
+                    save_skilt(skilt)
+                elif action == 'delete' and plate:
+                    skilt.pop(plate, None)
+                    save_skilt(skilt)
+                else:
+                    self.send_json({'ok': False, 'error': 'Ugyldig handling'}); return
+                self.send_json({'ok': True})
+            except Exception as e:
+                self.send_json({'ok': False, 'error': str(e)})
             return
 
         if self.path == '/api/restart/all':

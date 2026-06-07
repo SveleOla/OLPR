@@ -18,6 +18,9 @@ function showSubTab(name) {
   if (name === 'statistikk') {
     if (typeof updateStatistikk === 'function') updateStatistikk();
   }
+  if (name === 'kjente') {
+    updateKjenteBiler();
+  }
   if (name === 'innstillinger') {
     if (typeof loadSkiltSettings === 'function') loadSkiltSettings();
     if (typeof loadSettingsPage === 'function') loadSettingsPage();
@@ -25,6 +28,82 @@ function showSubTab(name) {
   if (name === 'dok') {
     if (typeof loadDocs === 'function') loadDocs();
   }
+}
+
+function updateKjenteBiler() {
+  fetch('/api/kjente')
+    .then(r => r.json())
+    .then(data => {
+      const tbody = document.getElementById('kjente-tbody');
+      if (!tbody) return;
+      const btn = document.getElementById('btn-sub-kjente');
+      if (btn) btn.textContent = `Kjente biler (${data.length})`;
+      let html = `<tr class="add-row"><td colspan="3">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="ny-plate" placeholder="AB12345" style="text-transform:uppercase;width:110px;">
+          <input type="text" id="ny-navn" placeholder="Eier / kallenavn" style="flex:1;min-width:140px;">
+          <button onclick="kjenteLeggTilNy()">+ Legg til</button>
+          <span id="ny-status" style="font-size:12px;color:#80c880"></span>
+        </div></td></tr>`;
+      data.forEach(({plate, name}) => {
+        const safePlate = plate.replace(/'/g, "\\'");
+        const safeName  = name.replace(/'/g, "\\'");
+        html += `<tr>
+          <td><b>${plate}</b></td>
+          <td style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="edit-${plate}" value="${name}" style="flex:1;">
+            <button onclick="kjenteLagreRad('${safePlate}')">Lagre</button>
+          </td>
+          <td><button class="del" onclick="kjenteSlettRad('${safePlate}','${safeName}')">Slett</button></td>
+        </tr>`;
+      });
+      tbody.innerHTML = html;
+    })
+    .catch(() => {});
+}
+
+function kjenteLeggTilNy() {
+  const plateEl = document.getElementById('ny-plate');
+  const navnEl  = document.getElementById('ny-navn');
+  const status  = document.getElementById('ny-status');
+  const plate = plateEl?.value?.trim().toUpperCase();
+  const name  = navnEl?.value?.trim();
+  if (!plate || !name) return;
+  fetch('/api/kjente', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'add', plate, name})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) {
+      if (plateEl) plateEl.value = '';
+      if (navnEl)  navnEl.value  = '';
+      if (status)  { status.textContent = '✅ Lagt til'; setTimeout(() => { status.textContent = ''; }, 2000); }
+      updateKjenteBiler();
+    }
+  }).catch(() => {});
+}
+
+function kjenteLagreRad(plate) {
+  const name = document.getElementById('edit-' + plate)?.value?.trim();
+  if (!name) return;
+  fetch('/api/kjente', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'edit', plate, name})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) updateKjenteBiler();
+  }).catch(() => {});
+}
+
+function kjenteSlettRad(plate, name) {
+  if (!confirm(`Slette ${plate} (${name})?`)) return;
+  fetch('/api/kjente', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({action: 'delete', plate})
+  }).then(r => r.json()).then(d => {
+    if (d.ok) updateKjenteBiler();
+  }).catch(() => {});
 }
 
 function showTab(name) {
