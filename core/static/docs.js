@@ -75,9 +75,9 @@ function renderDocs(d) {
     const startedStr = started ? started.replace('EET ', '').replace('CEST ', '') : '';
     return `<tr>
       <td><b>${name}</b></td>
-      <td><span style="color:${ok ? '#60c880' : '#ff8080'}">${ok ? '✅ Kjører' : '❌ ' + status}</span></td>
-      <td style="color:#a0b8d8;font-size:12px"><code>${exec || '–'}</code></td>
-      <td style="color:#888;font-size:12px">${startedStr}</td>
+      <td><span style="color:${ok ? 'var(--green)' : 'var(--red)'}">${ok ? '✅ Kjører' : '❌ ' + status}</span></td>
+      <td style="color:var(--text-dim);font-size:12px"><code>${exec || '–'}</code></td>
+      <td style="color:var(--muted);font-size:12px">${startedStr}</td>
     </tr>`;
   }).join('');
 
@@ -86,11 +86,11 @@ function renderDocs(d) {
     ? lprCams.map(c => `<tr>
         <td><b>${c.display_name || c.name}</b></td>
         <td>${c.ip}</td>
-        <td><code style="color:#60c880">loxone/${c.name}/resultat</code>
+        <td><code style="color:var(--green)">loxone/${c.name}/resultat</code>
           <button class="cam-copy-btn" onclick="copyTopic('loxone/${c.name}/resultat', this)">📋</button></td>
-        <td><code style="color:#7eb3ff">loxone/${c.name}/skilt</code></td>
+        <td><code style="color:var(--accent-2)">loxone/${c.name}/skilt</code></td>
       </tr>`).join('')
-    : '<tr><td colspan="4" style="color:#666">Ingen LPR-kameraer aktivert</td></tr>';
+    : '<tr><td colspan="4" style="color:var(--muted)">Ingen LPR-kameraer aktivert</td></tr>';
 
   // Alle kameraer
   function renderCameraTable(cams) {
@@ -98,13 +98,13 @@ function renderDocs(d) {
     if (!tbody) return;
     tbody.innerHTML = cams.map(c => {
       const main    = c.width && c.height ? `${c.width}×${c.height} ${c.fps||'?'}fps` : '–';
-      const detect  = c.detect_width && c.detect_height ? `<span style="color:#888;font-size:11px"><br>detect: ${c.detect_width}×${c.detect_height} ${c.detect_fps||'?'}fps</span>` : '';
+      const detect  = c.detect_width && c.detect_height ? `<span style="color:var(--muted);font-size:11px"><br>detect: ${c.detect_width}×${c.detect_height} ${c.detect_fps||'?'}fps</span>` : '';
       return `<tr>
         <td><b>${c.display_name || c.name}</b></td>
         <td>${c.ip}</td>
         <td>${main}${detect}</td>
         <td>${c.codec?.toUpperCase() || '?'}</td>
-        <td>${c.lpr ? '<span style="color:#60c880">✅ LPR</span>' : '–'}</td>
+        <td>${c.lpr ? '<span style="color:var(--green)">✅ LPR</span>' : '–'}</td>
         <td>${(c.objects || []).length ? c.objects.join(', ') : '–'}</td>
         <td>${c.record ? '✅' : '–'}</td>
       </tr>`;
@@ -139,7 +139,7 @@ function renderDocs(d) {
   const apiHtml = API_ENDPOINTS.map(e => `<tr>
     <td><span class="method-badge method-${e.method.toLowerCase()}">${e.method}</span></td>
     <td><code>${e.path}</code></td>
-    <td style="color:#8ab4d8">${e.desc}</td>
+    <td style="color:var(--text-dim)">${e.desc}</td>
   </tr>`).join('');
 
   el.innerHTML = `
@@ -157,8 +157,8 @@ function renderDocs(d) {
         <h2>⚙️ System</h2>
         <table><tbody>
           <tr><td>Navn</td><td><b>${sys.name || '–'}</b></td></tr>
-          <tr><td>Frigate</td><td><a href="${sys.frigate_url||'#'}" target="_blank" style="color:#7eb3ff">${sys.frigate_url||'–'}</a></td></tr>
-          <tr><td>Portainer</td><td><a href="${sys.portainer_url||'#'}" target="_blank" style="color:#7eb3ff">${sys.portainer_url||'–'}</a></td></tr>
+          <tr><td>Frigate</td><td><a href="${sys.frigate_url||'#'}" target="_blank" style="color:var(--accent-2)">${sys.frigate_url||'–'}</a></td></tr>
+          <tr><td>Portainer</td><td><a href="${sys.portainer_url||'#'}" target="_blank" style="color:var(--accent-2)">${sys.portainer_url||'–'}</a></td></tr>
         </tbody></table>
       </div>
     </div>

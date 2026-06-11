@@ -32,15 +32,15 @@ function updateStatistikk() {
           labels: d.daily.map(x => x.label),
           datasets: [
             { label: 'Unike', data: d.daily.map(x => x.unique),
-              backgroundColor: '#3a7bd5', borderRadius: 3 },
+              backgroundColor: cssVar('--accent'), borderRadius: 3 },
             { label: 'Totalt', data: d.daily.map(x => x.total),
-              backgroundColor: '#1a3a6a', borderRadius: 3 },
+              backgroundColor: cssVarA('--accent', 0.30), borderRadius: 3 },
           ]
         },
         options: { responsive: true,
-          plugins: { legend: { labels: { color: '#aac8ff' } } },
-          scales: { x: { ticks: { color: '#4a6a8a', maxRotation: 45 } },
-                    y: { ticks: { color: '#4a6a8a' }, beginAtZero: true } } }
+          plugins: { legend: { labels: { color: cssVar('--text-dim') } } },
+          scales: { x: { ticks: { color: cssVar('--muted'), maxRotation: 45 } },
+                    y: { ticks: { color: cssVar('--muted') }, beginAtZero: true } } }
       });
 
       // Ukedag
@@ -50,11 +50,11 @@ function updateStatistikk() {
         data: {
           labels: d.weekday.map(x => x.day),
           datasets: [{ label: 'Passeringer', data: d.weekday.map(x => x.count),
-            backgroundColor: '#2a6a4a', borderRadius: 3 }]
+            backgroundColor: cssVarA('--green', 0.60), borderRadius: 3 }]
         },
         options: { responsive: true, plugins: { legend: { display: false } },
-          scales: { x: { ticks: { color: '#4a6a8a' } },
-                    y: { ticks: { color: '#4a6a8a' }, beginAtZero: true } } }
+          scales: { x: { ticks: { color: cssVar('--muted') } },
+                    y: { ticks: { color: cssVar('--muted') }, beginAtZero: true } } }
       });
 
       // Timefordeling
@@ -64,11 +64,11 @@ function updateStatistikk() {
         data: {
           labels: d.hourly.map(x => x.hour),
           datasets: [{ label: 'Passeringer', data: d.hourly.map(x => x.count),
-            backgroundColor: '#6a3a7a', borderRadius: 2 }]
+            backgroundColor: cssVarA('--accent-2', 0.60), borderRadius: 2 }]
         },
         options: { responsive: true, plugins: { legend: { display: false } },
-          scales: { x: { ticks: { color: '#4a6a8a', font: { size: 10 } } },
-                    y: { ticks: { color: '#4a6a8a' }, beginAtZero: true } } }
+          scales: { x: { ticks: { color: cssVar('--muted'), font: { size: 10 } } },
+                    y: { ticks: { color: cssVar('--muted') }, beginAtZero: true } } }
       });
 
       // Alle besøkende

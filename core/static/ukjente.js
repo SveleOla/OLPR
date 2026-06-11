@@ -73,7 +73,7 @@ function leggTilKjent(plate, id) {
   }).then(r => r.json()).then(d => {
     if (d.ok) {
       document.getElementById('add-' + id).innerHTML =
-        '<span style="color:#80c880">✅ Lagt til i kjente biler</span>';
+        '<span style="color:var(--green)">✅ Lagt til i kjente biler</span>';
       setTimeout(updateEvents24h, 500);
       if (typeof updateKjenteBiler === 'function') updateKjenteBiler();
     }

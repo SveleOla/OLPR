@@ -40,7 +40,7 @@ function updateEvents24h() {
         const snapSrc    = ev.local_snapshot || '/api/frigate_snapshot/' + ev.event_id;
         const plateTekst = ev.plate === 'ukjent' ? '🔍 Ukjent' : ev.plate;
         const navnHtml   = ev.navn
-          ? `<div class="ukjente-card-kilde" style="color:#80c880;">${ev.navn}</div>` : '';
+          ? `<div class="ukjente-card-kilde" style="color:var(--green);">${ev.navn}</div>` : '';
         const kildeTekst = kildeLabel(ev.kilde, ev.frigate_plate);
         const safeId     = ev.event_id.replace(/[^a-zA-Z0-9_-]/g, '_');
         const addForm    = (ev.plate !== 'ukjent' && !ev.navn)
@@ -78,7 +78,7 @@ function leggTilKjentEv(plate, safeId) {
     redirect: 'manual'
   }).then(() => {
     document.getElementById('add-ev-' + safeId).innerHTML =
-      '<span style="color:#80c880">✅ Lagt til i kjente biler</span>';
+      '<span style="color:var(--green)">✅ Lagt til i kjente biler</span>';
     setTimeout(updateEvents24h, 500);
   });
 }

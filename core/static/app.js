@@ -1,3 +1,13 @@
+// Leser fargeverdier fra CSS-variabler (Chart.js/canvas kan ikke bruke var() direkte)
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function cssVarA(name, alpha) {
+  const v = cssVar(name);
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(v.slice(i, i + 2), 16));
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function showSubTab(name) {
   ['logg','kjente','statistikk','innstillinger','dok'].forEach(t => {
     const _el = document.getElementById('sub-' + t);
@@ -43,7 +53,7 @@ function updateKjenteBiler() {
           <input type="text" id="ny-plate" placeholder="AB12345" style="text-transform:uppercase;width:110px;">
           <input type="text" id="ny-navn" placeholder="Eier / kallenavn" style="flex:1;min-width:140px;">
           <button onclick="kjenteLeggTilNy()">+ Legg til</button>
-          <span id="ny-status" style="font-size:12px;color:#80c880"></span>
+          <span id="ny-status" style="font-size:12px;color:var(--green)"></span>
         </div></td></tr>`;
       data.forEach(({plate, name}) => {
         const safePlate = plate.replace(/'/g, "\\'");

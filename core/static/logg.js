@@ -60,7 +60,7 @@ function renderGalleri(items) {
 
     const kildeHtml = item.kilde
       ? kildeLabel(item.kilde, item.frigate_plate)
-      : '<span style="color:#888">–</span>';
+      : '<span style="color:var(--muted)">–</span>';
 
     const linje = item.linje.replace(/'/g, "\\'");
 
@@ -91,7 +91,7 @@ function leggTilFraLogg(plate, safeId) {
     redirect: 'manual'
   }).then(() => {
     document.getElementById('add-logg-' + safeId).innerHTML =
-      '<span style="color:#80c880">✅ Lagt til</span>';
+      '<span style="color:var(--green)">✅ Lagt til</span>';
     setTimeout(() => updateLogg(loggPage), 500);
   });
 }
@@ -119,7 +119,7 @@ function updateLogg(page) {
         } else {
           if (tabelEl) tabelEl.style.display = '';
           if (galleriEl) galleriEl.style.display = 'none';
-          if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="color:#666;text-align:center;">Ingen registreringer ennå</td></tr>';
+          if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;">Ingen registreringer ennå</td></tr>';
         }
         renderPagination(data);
         return;
@@ -164,7 +164,7 @@ function renderPagination(data) {
   if (!el) return;
   if (data.total === 0) { el.innerHTML = ''; return; }
   let html = `<div style="display:flex;gap:8px;align-items:center;margin-top:12px;justify-content:center;flex-wrap:wrap">`;
-  html += `<select onchange="loggPerPage=parseInt(this.value);updateLogg(1)" style="background:#1e2a3a;color:#c8d8f0;border:1px solid #2a3f5f;padding:4px 8px;border-radius:4px">`;
+  html += `<select onchange="loggPerPage=parseInt(this.value);updateLogg(1)" style="background:var(--surface-3);color:var(--text);border:1px solid var(--border-strong);padding:4px 8px;border-radius:4px">`;
   [10,20,50,100].forEach(n => {
     html += `<option value="${n}" ${n === loggPerPage ? 'selected' : ''}>${n} per side</option>`;
   });
@@ -172,11 +172,11 @@ function renderPagination(data) {
   if (data.pages > 1) {
     html += `<button onclick="updateLogg(1)" ${data.page === 1 ? 'disabled' : ''}>⟨⟨</button>`;
     html += `<button onclick="updateLogg(${data.page - 1})" ${data.page === 1 ? 'disabled' : ''}>⟨</button>`;
-    html += `<span style="color:#a0b8d8">Side ${data.page} av ${data.pages} (${data.total} totalt)</span>`;
+    html += `<span style="color:var(--text-dim)">Side ${data.page} av ${data.pages} (${data.total} totalt)</span>`;
     html += `<button onclick="updateLogg(${data.page + 1})" ${data.page === data.pages ? 'disabled' : ''}>⟩</button>`;
     html += `<button onclick="updateLogg(${data.pages})" ${data.page === data.pages ? 'disabled' : ''}>⟩⟩</button>`;
   } else {
-    html += `<span style="color:#a0b8d8">${data.total} totalt</span>`;
+    html += `<span style="color:var(--text-dim)">${data.total} totalt</span>`;
   }
   html += `</div>`;
   el.innerHTML = html;
