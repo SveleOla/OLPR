@@ -105,16 +105,10 @@ body {
   flex-wrap: wrap;
 }
 .brand { display: flex; align-items: baseline; gap: 11px; flex-wrap: wrap; }
-.brand-dot {
-  width: 9px; height: 9px; border-radius: 50%;
+.brand-logo {
+  width: 26px; height: 26px; display: block;
   align-self: center;
-  background: var(--accent-2);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 15%, transparent), 0 0 12px color-mix(in srgb, var(--accent-2) 80%, transparent);
-  animation: pulse 3s var(--ease) infinite;
-}
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-2) 15%, transparent), 0 0 12px color-mix(in srgb, var(--accent-2) 80%, transparent); }
-  50%      { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent-2) 7%, transparent), 0 0 6px color-mix(in srgb, var(--accent-2) 50%, transparent); }
+  filter: drop-shadow(0 0 8px var(--accent-glow));
 }
 .brand-tag {
   color: var(--muted);
@@ -601,6 +595,7 @@ input:checked + .toggle-slider:before { transform: translateX(18px); background:
   display: flex; align-items: center; justify-content: center;
   gap: 10px; margin-bottom: 8px;
 }
+.login-logo { width: 36px; height: 36px; }
 .login-box h1 { font-size: 22px; }
 .login-sub {
   text-align: center; color: var(--muted);

@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102a38"/>
+      <stop offset="1" stop-color="#060b11"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#5eead4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <!-- Bakgrunn -->
+  <rect width="512" height="512" rx="116" fill="url(#bg)"/>
+  <rect x="6" y="6" width="500" height="500" rx="110" fill="none" stroke="#22d3ee" stroke-opacity="0.25" stroke-width="4"/>
+  <circle cx="256" cy="256" r="200" fill="url(#glow)"/>
+  <!-- Søker-klammer -->
+  <g fill="none" stroke="url(#mark)" stroke-width="28" stroke-linecap="round">
+    <path d="M96 168 V134 A38 38 0 0 1 134 96 H168"/>
+    <path d="M344 96 H378 A38 38 0 0 1 416 134 V168"/>
+    <path d="M416 344 V378 A38 38 0 0 1 378 416 H344"/>
+    <path d="M168 416 H134 A38 38 0 0 1 96 378 V344"/>
+  </g>
+  <!-- Nummerskilt -->
+  <rect x="138" y="196" width="236" height="120" rx="24" fill="none" stroke="url(#mark)" stroke-width="24"/>
+  <!-- Skilttegn -->
+  <g fill="#5eead4">
+    <rect x="182" y="236" width="30" height="40" rx="8"/>
+    <rect x="241" y="236" width="30" height="40" rx="8"/>
+    <rect x="300" y="236" width="30" height="40" rx="8"/>
+  </g>
+  <!-- Skannelinje -->
+  <line x1="112" y1="256" x2="400" y2="256" stroke="#22d3ee" stroke-width="10" opacity="0.7"/>
+</svg>
