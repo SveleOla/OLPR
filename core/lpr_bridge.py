@@ -122,6 +122,7 @@ def init_db():
             camera    TEXT
         )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ukjente_tidspunkt ON ukjente(tidspunkt)")
     conn.commit()
     conn.close()
 
@@ -134,6 +135,8 @@ def init_db():
             camera    TEXT
         )
     """)
+    conn2.execute("CREATE INDEX IF NOT EXISTS idx_logg_tidspunkt ON logg(tidspunkt)")
+    conn2.execute("CREATE INDEX IF NOT EXISTS idx_logg_plate ON logg(plate)")
     conn2.commit()
     conn2.close()
     log.info("Databaser klare")

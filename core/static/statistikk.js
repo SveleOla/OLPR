@@ -18,7 +18,7 @@ function updateStatistikk() {
 
       // Top 5
       document.getElementById('stat-top5-body').innerHTML = d.top5.map(v =>
-        `<tr><td><b>${v.plate}</b></td><td>${v.navn}</td>
+        `<tr><td><b>${esc(v.plate)}</b></td><td>${esc(v.navn)}</td>
          <td>${v.count}</td><td>${v.last.slice(0,10)}</td>
          <td>${v.avg_days ? 'hver ' + v.avg_days + ' dag' : '–'}</td>
          <td>${(v.top_hours||[]).map(h=>h+':00').join(' / ')||'–'}</td></tr>`
@@ -96,7 +96,7 @@ function renderAlle() {
     return asc ? va - vb : vb - va;
   });
   document.getElementById('stat-alle-body').innerHTML = data.map(v =>
-    `<tr><td><b>${v.plate}</b></td><td>${v.navn}</td>
+    `<tr><td><b>${esc(v.plate)}</b></td><td>${esc(v.navn)}</td>
      <td>${v.count}</td>
      <td>${v.avg_days ? 'hver ' + v.avg_days + ' dag' : '–'}</td>
      <td>${(v.top_hours||[]).map(h=>h+':00').join(' / ') || '–'}</td></tr>`

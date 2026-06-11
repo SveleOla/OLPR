@@ -1,0 +1,15 @@
+/* Lokale variabelfonter — vendored fra Google Fonts (latin-subset, dekker æøå) */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/static/vendor/fonts/Inter.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url(/static/vendor/fonts/JetBrainsMono.woff2) format('woff2');
+}

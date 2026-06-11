@@ -4,18 +4,18 @@ function kildeLabel(kilde, frigatePlate) {
     case 'kjent':
     case 'frigate':   frigateStr = '✅'; gptStr = null; break;
     case 'gpt_verifisert':
-      frigateStr = '❌' + (frigatePlate ? ` (${frigatePlate})` : ''); gptStr = '✅'; break;
+      frigateStr = '❌' + (frigatePlate ? ` (${esc(frigatePlate)})` : ''); gptStr = '✅'; break;
     case 'gpt_fallback': frigateStr = '❌'; gptStr = '✅'; break;
     case 'frigate_gpt_feilet':
-      frigateStr = '❌' + (frigatePlate ? ` (${frigatePlate})` : ''); gptStr = '❌'; break;
+      frigateStr = '❌' + (frigatePlate ? ` (${esc(frigatePlate)})` : ''); gptStr = '❌'; break;
     case 'kjent_gpt_enig':
     case 'frigate_gpt_enig':
       frigateStr = '✅'; gptStr = '✅'; break;
     case 'kjent_gpt_uenig':
     case 'frigate_gpt_uenig':
-      frigateStr = '✅'; gptStr = `⚠️ uenig (${frigatePlate||''})`.trim(); break;
+      frigateStr = '✅'; gptStr = `⚠️ uenig (${esc(frigatePlate||'')})`.trim(); break;
     case 'ukjent':
-      frigateStr = frigatePlate ? `❌ (${frigatePlate})` : '❌'; gptStr = '❌'; break;
+      frigateStr = frigatePlate ? `❌ (${esc(frigatePlate)})` : '❌'; gptStr = '❌'; break;
     default: frigateStr = kilde ? '✅' : '–'; gptStr = null;
   }
   let html = `<span style="display:block">Frigate ${frigateStr}</span>`;
@@ -38,16 +38,16 @@ function updateEvents24h() {
       }
       grid.innerHTML = events.map(ev => {
         const snapSrc    = ev.local_snapshot || '/api/frigate_snapshot/' + ev.event_id;
-        const plateTekst = ev.plate === 'ukjent' ? '🔍 Ukjent' : ev.plate;
+        const plateTekst = ev.plate === 'ukjent' ? '🔍 Ukjent' : esc(ev.plate);
         const navnHtml   = ev.navn
-          ? `<div class="ukjente-card-kilde" style="color:var(--green);">${ev.navn}</div>` : '';
+          ? `<div class="ukjente-card-kilde" style="color:var(--green);">${esc(ev.navn)}</div>` : '';
         const kildeTekst = kildeLabel(ev.kilde, ev.frigate_plate);
         const safeId     = ev.event_id.replace(/[^a-zA-Z0-9_-]/g, '_');
         const addForm    = (ev.plate !== 'ukjent' && !ev.navn)
           ? `<div id="add-ev-${safeId}" style="margin-top:8px;">
                <input type="text" id="name-ev-${safeId}" placeholder="Navn..."
                       style="width:100%;margin-bottom:4px;font-size:12px;">
-               <button onclick="leggTilKjentEv('${ev.plate}','${safeId}')"
+               <button onclick="leggTilKjentEv('${esc(ev.plate.replace(/['\\]/g, ''))}','${safeId}')"
                        style="width:100%;font-size:11px;">+ Legg til som kjent</button>
              </div>` : '';
         return `<div class="ukjente-card">
@@ -55,7 +55,7 @@ function updateEvents24h() {
                onclick="openLightbox('${snapSrc}')"
                onerror="this.parentElement.innerHTML='<div class=\\'ukjente-no-img\\'>Ingen bilde</div>'">
           <div class="ukjente-card-body">
-            <div class="ukjente-card-plate">${plateTekst}${ev.camera ? `<span class='cam-badge'>${ev.camera}</span>` : ''}</div>
+            <div class="ukjente-card-plate">${plateTekst}${ev.camera ? `<span class='cam-badge'>${esc(ev.camera)}</span>` : ''}</div>
             ${navnHtml}
             <div class="ukjente-card-time">${ev.tidspunkt}</div>
             <div class="ukjente-card-kilde" style="line-height:1.6">${kildeTekst}</div>

@@ -42,9 +42,11 @@ SETTINGS_DEFAULTS = {
                "portainer_url": "http://localhost:9000"},
     "mqtt":   {"result_topic": "lpr/{camera}/resultat",
                "plate_topic":  "lpr/{camera}/skilt"},
+    "auth":   {"username": "admin"},
 }
 
 SESSIONS = {}
+FAILED_LOGINS = {}   # ip -> [tidspunkt for feilede forsøk]
 LOGIN_TEMPLATE = os.path.join(BASE_DIR, 'templates', 'login.html')
 
 def check_auth(handler):
@@ -57,8 +59,32 @@ def check_auth(handler):
                 return True
     return False
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password, salt=None):
+    """PBKDF2-SHA256, lagres som 'salt$hash' (hex)."""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    dk = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(salt), 200_000)
+    return f"{salt}${dk.hex()}"
+
+def verify_password(password, stored):
+    if not stored or '$' not in stored:
+        return False
+    salt = stored.split('$', 1)[0]
+    return secrets.compare_digest(hash_password(password, salt), stored)
+
+def migrate_auth():
+    """Engangs: konverter klartekst-passord i settings.json til PBKDF2-hash."""
+    try:
+        with open(SETTINGS_FILE) as f:
+            s = json.load(f)
+    except Exception:
+        return
+    auth = s.get('auth', {})
+    if 'password' in auth:
+        auth['password_hash'] = hash_password(auth.pop('password'))
+        s['auth'] = auth
+        save_settings_file(s)
+        log.info("auth: klartekst-passord migrert til PBKDF2-hash")
 
 def load_settings():
     try:
@@ -563,13 +589,21 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def serve_static(self, path):
-        filepath = STATIC_DIR + path[7:]
+        filepath = os.path.realpath(STATIC_DIR + path[7:])
+        if not filepath.startswith(os.path.realpath(STATIC_DIR) + os.sep):
+            self.send_response(404)
+            self.end_headers()
+            return
         try:
             mime, _ = mimetypes.guess_type(filepath)
             with open(filepath, 'rb') as f:
                 content = f.read()
             self.send_response(200)
             self.send_header('Content-type', mime or 'text/plain')
+            if '/vendor/' in filepath or filepath.endswith(('.woff2', '.jpg', '.jpeg', '.png', '.svg', '.ico')):
+                self.send_header('Cache-Control', 'public, max-age=604800')
+            else:
+                self.send_header('Cache-Control', 'public, max-age=300')
             self.end_headers()
             self.wfile.write(content)
         except FileNotFoundError:
@@ -597,14 +631,15 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
+        # Statiske filer (CSS/JS/fonter) er ikke sensitive og trengs på login-siden
+        if parsed.path.startswith('/static/'):
+            self.serve_static(parsed.path)
+            return
+
         if not check_auth(self):
             self.send_response(303)
             self.send_header('Location', '/login')
             self.end_headers()
-            return
-
-        if parsed.path.startswith('/static/'):
-            self.serve_static(parsed.path)
             return
 
         if parsed.path == '/health':
@@ -656,6 +691,7 @@ class Handler(BaseHTTPRequestHandler):
                     data = r.read()
                 self.send_response(200)
                 self.send_header('Content-type', 'image/jpeg')
+                self.send_header('Cache-Control', 'public, max-age=604800, immutable')
                 self.end_headers()
                 self.wfile.write(data)
             except Exception:
@@ -702,6 +738,7 @@ class Handler(BaseHTTPRequestHandler):
                     data = f.read()
                 self.send_response(200)
                 self.send_header('Content-type', 'image/jpeg')
+                self.send_header('Cache-Control', 'public, max-age=604800, immutable')
                 self.end_headers()
                 self.wfile.write(data)
             except FileNotFoundError:
@@ -860,6 +897,8 @@ class Handler(BaseHTTPRequestHandler):
                     s['cameras'] = json.load(_f).get('cameras', [])
             except Exception:
                 s['cameras'] = []
+            # Aldri send hash/passord til klienten — tomt felt betyr «uendret»
+            s['auth'] = {'username': s.get('auth', {}).get('username', 'admin'), 'password': ''}
             self.send_json(s)
             return
 
@@ -921,14 +960,22 @@ class Handler(BaseHTTPRequestHandler):
 
         if self.path == '/login':
             try:
+                ip  = self.client_address[0]
+                now = time.time()
+                FAILED_LOGINS[ip] = [t for t in FAILED_LOGINS.get(ip, []) if now - t < 300]
+                if len(FAILED_LOGINS[ip]) >= 5:
+                    with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
+                        tpl = f.read().replace('__ERROR__', '<p class="login-error">For mange forsøk — vent 5 minutter</p>')
+                    self.send_html(tpl)
+                    return
                 params   = parse_qs(raw_body)
                 username = params.get('username', [''])[0]
                 password = params.get('password', [''])[0]
-                s        = load_settings()
-                auth     = s.get('auth', {})
+                auth     = load_settings().get('auth', {})
                 ok_user  = auth.get('username', 'admin')
-                ok_pass  = auth.get('password', 'olpr')
-                if username == ok_user and password == ok_pass:
+                stored   = auth.get('password_hash') or hash_password('olpr')
+                if secrets.compare_digest(username, ok_user) and verify_password(password, stored):
+                    FAILED_LOGINS.pop(ip, None)
                     token = secrets.token_hex(32)
                     SESSIONS[token] = username
                     self.send_response(303)
@@ -936,6 +983,8 @@ class Handler(BaseHTTPRequestHandler):
                     self.send_header('Set-Cookie', f'session={token}; Path=/; HttpOnly')
                     self.end_headers()
                 else:
+                    FAILED_LOGINS[ip].append(now)
+                    time.sleep(0.5)
                     with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
                         tpl = f.read().replace('__ERROR__', '<p class="login-error">Feil brukernavn eller passord</p>')
                     self.send_html(tpl)
@@ -1045,6 +1094,7 @@ iface {iface} inet static
         if self.path == '/api/settings':
             try:
                 data = json.loads(raw_body)
+                _existing = {}
                 try:
                     with open(SETTINGS_FILE) as _f:
                         _existing = json.load(_f)
@@ -1052,6 +1102,15 @@ iface {iface} inet static
                         data['cameras'] = _existing['cameras']
                 except Exception:
                     pass
+                # Nytt passord hashes; tomt felt beholder eksisterende hash
+                new_auth = data.get('auth') or {}
+                pw = new_auth.pop('password', '') or ''
+                new_auth.pop('password_hash', None)  # klienten kan aldri sette hash direkte
+                if pw:
+                    new_auth['password_hash'] = hash_password(pw)
+                elif _existing.get('auth', {}).get('password_hash'):
+                    new_auth['password_hash'] = _existing['auth']['password_hash']
+                data['auth'] = new_auth
                 current     = load_settings()
                 lpr_changed = data.get('lpr') != current.get('lpr')
                 save_settings_file(data)
@@ -1112,4 +1171,5 @@ iface {iface} inet static
         self.end_headers()
 
 
+migrate_auth()
 ThreadingHTTPServer(("0.0.0.0", 8080), Handler).serve_forever()

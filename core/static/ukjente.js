@@ -36,20 +36,20 @@ function updateUkjente() {
                onclick="openLightbox('${item.snapshot}')"
                onerror="this.parentElement.innerHTML='<div class=\\'ukjente-no-img\\'>Ingen bilde</div>'">`
           : `<div class="ukjente-no-img">Ingen bilde</div>`;
-        const plateTekst = item.plate === 'ukjent' ? '🔍 Ukjent' : item.plate;
+        const plateTekst = item.plate === 'ukjent' ? '🔍 Ukjent' : esc(item.plate);
         const kildeTekst = kildeLabel(item.kilde, item.frigate_plate);
         const addForm = (item.plate !== 'ukjent')
           ? `<div id="add-${item.id}" style="margin-top:8px;">
                <input type="text" id="name-${item.id}" placeholder="Navn..."
                       style="width:100%;margin-bottom:4px;font-size:12px;">
-               <button onclick="leggTilKjent('${item.plate}', ${item.id})"
+               <button onclick="leggTilKjent('${esc(item.plate.replace(/['\\]/g, ''))}', ${item.id})"
                        style="width:100%;font-size:11px;margin-bottom:4px;">+ Legg til som kjent</button>
              </div>`
           : '';
         return `<div class="ukjente-card" id="ukjente-${item.id}">
           ${imgHtml}
           <div class="ukjente-card-body">
-            <div class="ukjente-card-plate">${plateTekst}${item.camera ? `<span class='cam-badge'>${item.camera}</span>` : ''}</div>
+            <div class="ukjente-card-plate">${plateTekst}${item.camera ? `<span class='cam-badge'>${esc(item.camera)}</span>` : ''}</div>
             <div class="ukjente-card-time">${item.tidspunkt}</div>
             <div class="ukjente-card-kilde" style="line-height:1.6">${kildeTekst}</div>
             ${addForm}

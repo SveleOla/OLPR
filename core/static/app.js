@@ -8,6 +8,10 @@ function cssVarA(name, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
 function showSubTab(name) {
   ['logg','kjente','statistikk','innstillinger','dok'].forEach(t => {
     const _el = document.getElementById('sub-' + t);
@@ -59,12 +63,12 @@ function updateKjenteBiler() {
         const safePlate = plate.replace(/'/g, "\\'");
         const safeName  = name.replace(/'/g, "\\'");
         html += `<tr>
-          <td><b>${plate}</b></td>
+          <td><b>${esc(plate)}</b></td>
           <td style="display:flex;gap:6px;align-items:center;">
-            <input type="text" id="edit-${plate}" value="${name}" style="flex:1;">
-            <button onclick="kjenteLagreRad('${safePlate}')">Lagre</button>
+            <input type="text" id="edit-${esc(plate)}" value="${esc(name)}" style="flex:1;">
+            <button onclick="kjenteLagreRad('${esc(safePlate)}')">Lagre</button>
           </td>
-          <td><button class="del" onclick="kjenteSlettRad('${safePlate}','${safeName}')">Slett</button></td>
+          <td><button class="del" onclick="kjenteSlettRad('${esc(safePlate)}','${esc(safeName)}')">Slett</button></td>
         </tr>`;
       });
       tbody.innerHTML = html;
@@ -155,21 +159,5 @@ function updateDashboard() {
     .catch(() => {});
 }
 
-function updateStorm() {
-  fetch('/api/storm')
-    .then(r => r.json())
-    .then(d => {
-      const banner = document.getElementById('storm-banner');
-      if (d.storm === 1) {
-        banner.classList.add('active');
-      } else {
-        banner.classList.remove('active');
-      }
-    })
-    .catch(() => {});
-}
-
 window.addEventListener('DOMContentLoaded', updateDashboard);
-window.addEventListener('DOMContentLoaded', updateStorm);
 setInterval(updateDashboard, 15000);
-setInterval(updateStorm, 3000);

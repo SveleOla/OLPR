@@ -50,11 +50,11 @@ function renderGalleri(items) {
       : `<div class="ukjente-no-img">Ingen bilde</div>`;
 
     const navnHtml = item.navn
-      ? `<span class="kjent">${item.navn}</span>`
+      ? `<span class="kjent">${esc(item.navn)}</span>`
       : `<div id="add-logg-${item.linje.replace(/[^a-zA-Z0-9]/g,'_')}" style="margin-top:6px">
            <input type="text" id="name-logg-${item.linje.replace(/[^a-zA-Z0-9]/g,'_')}" 
                   placeholder="Navn..." style="width:100%;margin-bottom:4px;font-size:12px">
-           <button onclick="leggTilFraLogg('${item.plate}','${item.linje.replace(/[^a-zA-Z0-9]/g,'_')}')"
+           <button onclick="leggTilFraLogg('${esc(item.plate.replace(/['\\]/g, ''))}','${item.linje.replace(/[^a-zA-Z0-9]/g,'_')}')"
                    style="width:100%;font-size:11px">+ Legg til som kjent</button>
          </div>`;
 
@@ -67,8 +67,8 @@ function renderGalleri(items) {
     return `<div class="ukjente-card">
       ${imgHtml}
       <div class="ukjente-card-body">
-        <div class="ukjente-card-plate">${item.plate}
-          ${item.camera ? `<span class='cam-badge'>${item.camera}</span>` : ''}
+        <div class="ukjente-card-plate">${esc(item.plate)}
+          ${item.camera ? `<span class='cam-badge'>${esc(item.camera)}</span>` : ''}
         </div>
         <div class="ukjente-card-time">${item.dato} ${item.tid}</div>
         ${navnHtml}
@@ -133,9 +133,9 @@ function updateLogg(page) {
         if (galleriEl) galleriEl.style.display = 'none';
         let html = '';
         data.lines.forEach(item => {
-          const camera  = item.camera || '';
-          const plate   = item.plate.replace(/[<>"'&]/g, c => ({"<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;","&":"&amp;"}[c]));
-          const eier    = (item.navn||"").replace(/[<>"'&]/g, c => ({"<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;","&":"&amp;"}[c]));
+          const camera  = esc(item.camera || '');
+          const plate   = esc(item.plate);
+          const eier    = esc(item.navn||"");
           const linje   = item.linje.replace(/'/g, "\\'");
           const eierHtml = item.navn
             ? `<span class="kjent">${eier}</span>`
