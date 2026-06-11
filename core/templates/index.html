@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>__SYSTEM_NAME__</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/app.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -16,17 +19,24 @@
   <script src="/static/docs.js" defer></script>
 </head>
 <body>
-  <h1>__SYSTEM_NAME__<span style="display:block;font-size:13px;font-weight:400;letter-spacing:2px;text-transform:uppercase;color:#4a6a9a;margin-top:4px;-webkit-text-fill-color:#4a6a9a">Automatisk skiltgjenkjenning</span></h1>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1>__SYSTEM_NAME__</h1>
+        <span class="brand-tag">Automatisk skiltgjenkjenning</span>
+      </div>
+      <nav class="sub-tabs">
+        <button id="btn-sub-statistikk" class="sub-active" onclick="showSubTab('statistikk')">Dashboard</button>
+        <button id="btn-sub-logg" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
+        <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
+        <button id="btn-sub-innstillinger" onclick="showSubTab('innstillinger')">⚙️ Innstillinger</button>
+        <button id="btn-sub-dok" onclick="showSubTab('dok')">📖 Dok</button>
+      </nav>
+    </div>
+  </header>
 
-  <!-- SERVER STATUS -->
-  <div class="sub-tabs">
-    <button id="btn-sub-statistikk" class="sub-active" onclick="showSubTab('statistikk')">Dashboard</button>
-    <button id="btn-sub-logg" onclick="showSubTab('logg')">__LOGG_LABEL__</button>
-    <button id="btn-sub-kjente" onclick="showSubTab('kjente')">Kjente biler (__SKILT_COUNT__)</button>
-    <button id="btn-sub-innstillinger" onclick="showSubTab('innstillinger')">⚙️ Innstillinger</button>
-    <button id="btn-sub-dok" onclick="showSubTab('dok')">📖 Dok</button>
-  </div>
-
+  <main class="page">
   <div id="sub-logg" class="hidden">
     <p class="count">__LOGG_STATUS__</p>
     <button id="btn-historikk" style="margin-bottom:12px">📅 Vis historikk</button>
@@ -110,6 +120,7 @@
   <div id="sub-dok" class="hidden">
     <div id="docs-container"><p class="no-data">Laster dokumentasjon...</p></div>
   </div>
+  </main>
 
   <div id="lightbox" class="lightbox" onclick="closeLightbox()">
     <img id="lightbox-img" src="" alt="">

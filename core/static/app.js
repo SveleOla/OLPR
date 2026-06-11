@@ -129,7 +129,7 @@ function setBar(id, pct) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.width = pct + '%';
-  el.style.backgroundColor = pct > 85 ? '#c0392b' : '#3a7bd5';
+  el.classList.toggle('danger', pct > 85);
 }
 
 function updateDashboard() {
