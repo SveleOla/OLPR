@@ -570,6 +570,592 @@ def get_system_stats():
     return stats
 
 
+# ── Routing ───────────────────────────────────────────────────────────────────
+# Eksakte ruter slås opp i GET_ROUTES/POST_ROUTES, prefiks-ruter sjekkes i
+# rekkefølge. GET-funksjoner kalles med (handler, parsed_url), POST-funksjoner
+# med (handler, raw_body, post_params). /login, /logout og /static håndteres
+# før auth-sjekken i do_GET/do_POST og ligger ikke i tabellene.
+
+GET_ROUTES        = {}   # sti -> funksjon
+POST_ROUTES       = {}   # sti -> funksjon
+GET_PREFIX_ROUTES = []   # (prefiks, funksjon)
+
+
+def register_route(method, path, fn, prefix=False):
+    """Utvidelsespunkt: registrer én rute utenfra (kun GET støtter prefix)."""
+    if prefix:
+        GET_PREFIX_ROUTES.append((path, fn))
+    elif method == 'GET':
+        GET_ROUTES[path] = fn
+    else:
+        POST_ROUTES[path] = fn
+
+
+def register_routes(method, mapping):
+    """Utvidelsespunkt: registrer flere ruter på én gang: {sti: funksjon}."""
+    for path, fn in mapping.items():
+        register_route(method, path, fn)
+
+
+def rute(method, path, prefix=False):
+    """Dekorator for interne ruter."""
+    def deco(fn):
+        register_route(method, path, fn, prefix=prefix)
+        return fn
+    return deco
+
+
+# ── GET-ruter ─────────────────────────────────────────────────────────────────
+
+@rute('GET', '/health')
+def get_health(h, parsed):
+    h.send_response(200)
+    h.send_header('Content-type', 'text/plain')
+    h.end_headers()
+    h.wfile.write(b'OK')
+
+
+@rute('GET', '/api/status')
+def get_status(h, parsed):
+    h.send_json(get_system_stats())
+
+
+@rute('GET', '/api/logg')
+def get_logg(h, parsed):
+    qs2      = parse_qs(parsed.query)
+    all_     = qs2.get('all', ['0'])[0] == '1'
+    page     = int(qs2.get('page', ['1'])[0])
+    per_page = int(qs2.get('per_page', ['20'])[0])
+    entries  = load_logg_entries(all_)
+    total    = len(entries)
+    start    = (page - 1) * per_page
+    end      = start + per_page
+    h.send_json({
+        'lines':       entries[start:end],
+        'total':       total,
+        'today_total': len(load_logg_entries(False)),
+        'page':        page,
+        'per_page':    per_page,
+        'pages':       (total + per_page - 1) // per_page,
+        'show_all':    all_,
+    })
+
+
+@rute('GET', '/api/statistikk')
+def get_statistikk(h, parsed):
+    h.send_json(load_statistikk())
+
+
+@rute('GET', '/api/events24h')
+def get_events24h(h, parsed):
+    qs2  = parse_qs(parsed.query)
+    all_ = qs2.get('all', ['0'])[0] == '1'
+    h.send_json(load_events_24h(all_))
+
+
+@rute('GET', '/api/frigate_snapshot/', prefix=True)
+def get_frigate_snapshot(h, parsed):
+    event_id = os.path.basename(parsed.path)
+    try:
+        url = f'http://localhost:5000/api/events/{event_id}/snapshot.jpg?crop=1'
+        with urllib.request.urlopen(url, timeout=5) as r:
+            data = r.read()
+        h.send_response(200)
+        h.send_header('Content-type', 'image/jpeg')
+        h.send_header('Cache-Control', 'public, max-age=604800, immutable')
+        h.end_headers()
+        h.wfile.write(data)
+    except Exception:
+        h.send_response(404)
+        h.end_headers()
+
+
+@rute('GET', '/api/kjente')
+def get_kjente(h, parsed):
+    skilt = load_skilt()
+    data = [{'plate': p, 'name': n} for p, n in sorted(skilt.items(), key=lambda x: x[1].lower())]
+    h.send_json(data)
+
+
+@rute('GET', '/api/ukjente')
+def get_ukjente(h, parsed):
+    qs2  = parse_qs(parsed.query)
+    all_ = qs2.get('all', ['0'])[0] == '1'
+    h.send_json(load_ukjente(all_))
+
+
+@rute('GET', '/api/ukjente/slett')
+def get_ukjente_slett(h, parsed):
+    qs2 = parse_qs(parsed.query)
+    uid = qs2.get('id', [None])[0]
+    if uid:
+        try:
+            conn = sqlite3.connect(UKJENTE_DB)
+            row  = conn.execute('SELECT snapshot FROM ukjente WHERE id=?', (uid,)).fetchone()
+            if row and row[0]:
+                try: os.remove(row[0])
+                except Exception: pass
+            conn.execute('DELETE FROM ukjente WHERE id=?', (uid,))
+            conn.commit(); conn.close()
+            h.send_json({'ok': True})
+        except Exception as e:
+            h.send_json({'ok': False, 'error': str(e)})
+    else:
+        h.send_json({'ok': False})
+
+
+@rute('GET', '/snapshot/', prefix=True)
+def get_snapshot(h, parsed):
+    filename = os.path.basename(parsed.path[10:])
+    filepath = os.path.join(UKJENTE_SNAPSHOTS, filename)
+    try:
+        with open(filepath, 'rb') as f:
+            data = f.read()
+        h.send_response(200)
+        h.send_header('Content-type', 'image/jpeg')
+        h.send_header('Cache-Control', 'public, max-age=604800, immutable')
+        h.end_headers()
+        h.wfile.write(data)
+    except FileNotFoundError:
+        h.send_response(404)
+        h.end_headers()
+
+
+@rute('GET', '/api/gpt/test')
+def get_gpt_test(h, parsed):
+    try:
+        s     = load_settings()['lpr']
+        key   = s.get('openai_api_key', '')
+        model = s.get('gpt_model', 'gpt-4o')
+        if not key:
+            h.send_json({'ok': False, 'error': 'Ingen API-nøkkel konfigurert'})
+            return
+        import requests as _req
+        r = _req.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={"model": model, "max_tokens": 5,
+                  "messages": [{"role": "user", "content": "Reply with OK"}]},
+            timeout=10
+        )
+        if r.status_code == 200:
+            h.send_json({'ok': True, 'model': model,
+                         'response': r.json()['choices'][0]['message']['content'].strip()})
+        else:
+            err = r.json().get('error', {}).get('message', f'HTTP {r.status_code}')
+            h.send_json({'ok': False, 'error': err})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('GET', '/api/camera/test')
+def get_camera_test(h, parsed):
+    qs2  = parse_qs(parsed.query)
+    ip   = qs2.get('ip', [''])[0]
+    user = qs2.get('user', [''])[0]
+    pwd  = qs2.get('pass', [''])[0]
+    path_rtsp = qs2.get('path', ['/Streaming/Channels/101'])[0]
+    if not path_rtsp.startswith('/'):
+        path_rtsp = '/' + path_rtsp
+    url = f"rtsp://{user}:{pwd}@{ip}:554{path_rtsp}"
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', url],
+            capture_output=True, text=True, timeout=10
+        )
+        data  = json.loads(result.stdout)
+        video = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), None)
+        if video:
+            fps_str = video.get('r_frame_rate', '25/1')
+            try:
+                num, den = map(int, fps_str.split('/'))
+                fps = round(num / den, 1) if den else 25
+            except Exception:
+                fps = 25
+            h.send_json({'ok': True, 'codec': video.get('codec_name', '?'),
+                         'width': video.get('width', 0), 'height': video.get('height', 0), 'fps': fps})
+        else:
+            h.send_json({'ok': False, 'error': 'Ingen videostrøm funnet'})
+    except subprocess.TimeoutExpired:
+        h.send_json({'ok': False, 'error': 'Tidsavbrutt (10s)'})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('GET', '/api/network')
+def get_network(h, parsed):
+    try:
+        import subprocess as _sp
+        ip      = _sp.run(['hostname', '-I'], capture_output=True, text=True).stdout.strip().split()[0]
+        gateway = _sp.run(['ip', 'route', 'show', 'default'], capture_output=True, text=True).stdout.split()[2]
+        h.send_json({'ok': True, 'ip': ip, 'netmask': '255.255.255.0', 'gateway': gateway, 'dns': gateway})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('GET', '/api/cameras')
+def get_cameras(h, parsed):
+    try:
+        with open(SETTINGS_FILE) as f:
+            h.send_json(json.load(f).get('cameras', []))
+    except Exception:
+        h.send_json([])
+
+
+@rute('GET', '/api/docs')
+def get_docs(h, parsed):
+    try:
+        s = load_settings()
+        with open(SETTINGS_FILE) as _f:
+            cameras = json.load(_f).get('cameras', [])
+    except Exception:
+        cameras = []
+    services = {}
+    for svc in ['lpr-bridge', 'lpr-web']:
+        try:
+            active = subprocess.run(['systemctl', 'is-active', svc],
+                                    capture_output=True, text=True).stdout.strip()
+            show = subprocess.run(
+                ['systemctl', 'show', svc, '--property=ExecStart,Description,ActiveEnterTimestamp'],
+                capture_output=True, text=True).stdout.strip()
+            props = {}
+            for line in show.splitlines():
+                k, _, v = line.partition('=')
+                props[k] = v
+            exec_start = ''
+            raw = props.get('ExecStart', '')
+            import re as _re
+            m = _re.search(r'argv\[\]=([^;]+)', raw)
+            if m:
+                exec_start = m.group(1).strip()
+            services[svc] = {
+                'status':      active,
+                'description': props.get('Description', ''),
+                'exec':        exec_start,
+                'started':     props.get('ActiveEnterTimestamp', '').replace('n/a', ''),
+            }
+        except Exception:
+            services[svc] = {'status': 'unknown', 'description': '', 'exec': '', 'started': ''}
+    h.send_json({
+        'system':   s.get('system', {}),
+        'lpr':      s.get('lpr', {}),
+        'web':      s.get('web', {}),
+        'cameras':  cameras,
+        'services': services,
+    })
+
+
+@rute('GET', '/api/frigate_config')
+def get_frigate_config(h, parsed):
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:5000/api/config', timeout=5) as r:
+            fc = json.loads(r.read())
+        result = {}
+        for name, cam in fc.get('cameras', {}).items():
+            detect = cam.get('detect', {})
+            objects = cam.get('objects', {}).get('track', [])
+            inputs = cam.get('ffmpeg', {}).get('inputs', [])
+            roles = []
+            for inp in inputs:
+                roles.extend(inp.get('roles', []))
+            result[name] = {
+                'width':   detect.get('width'),
+                'height':  detect.get('height'),
+                'fps':     detect.get('fps'),
+                'objects': objects,
+                'record':  'record' in roles,
+                'detect':  detect.get('enabled', True),
+            }
+        h.send_json(result)
+    except Exception:
+        h.send_json({})
+
+
+@rute('GET', '/api/settings')
+def get_settings(h, parsed):
+    s = load_settings()
+    try:
+        with open(SETTINGS_FILE) as _f:
+            s['cameras'] = json.load(_f).get('cameras', [])
+    except Exception:
+        s['cameras'] = []
+    # Aldri send hash/passord til klienten — tomt felt betyr «uendret»
+    s['auth'] = {'username': s.get('auth', {}).get('username', 'admin'), 'password': ''}
+    h.send_json(s)
+
+
+def get_index(h, parsed):
+    """Fallback for GET: hovedsiden (dashboard)."""
+    skilt       = load_skilt()
+    stats       = get_system_stats()
+    logg_status = "Oppdateres hvert 30. sekund"
+    kjente_rows = (
+        '<tr class="add-row"><td colspan="3">'
+        '<form method="POST" class="inline" style="display:flex;gap:8px;align-items:center;">'
+        '<input type="hidden" name="action" value="add">'
+        '<input type="text" name="plate" placeholder="AB12345" required '
+        'pattern="[A-Za-z]{2}[0-9]{5}" style="text-transform:uppercase;width:110px;">'
+        '<input type="text" name="name" placeholder="Eier / kallenavn" required style="flex:1;">'
+        '<button type="submit">+ Legg til ny bil</button>'
+        '</form></td></tr>'
+    )
+    for plate, name in sorted(skilt.items(), key=lambda x: x[1].lower()):
+        ep = html.escape(plate)
+        en = html.escape(name)
+        kjente_rows += (
+            f'<tr><td><b>{ep}</b></td>'
+            f'<td><form method="POST" class="inline">'
+            f'<input type="hidden" name="action" value="edit">'
+            f'<input type="hidden" name="plate" value="{ep}">'
+            f'<input type="text" name="name" value="{en}" required>'
+            f'<button type="submit">Lagre</button>'
+            f'</form></td>'
+            f'<td><form method="POST" class="inline" '
+            f'onsubmit="return confirm(\'Slette {ep} ({en})?\');">'
+            f'<input type="hidden" name="action" value="delete">'
+            f'<input type="hidden" name="plate" value="{ep}">'
+            f'<button type="submit" class="del">Slett</button>'
+            f'</form></td></tr>'
+        )
+    page = load_template({
+        '__SYSTEM_NAME__':  load_settings()['system'].get('name', 'OLPR'),
+        '__FRIGATE_URL__':  load_settings()['system'].get('frigate_url', 'http://localhost:5000'),
+        '__PORTAINER_URL__': load_settings()['system'].get('portainer_url', 'http://localhost:9000'),
+        '__LOGG_LABEL__':   'Logg',
+        '__SKILT_COUNT__':  str(len(skilt)),
+        '__STAT_LOAD__':    stats['load'],
+        '__STAT_RAM__':     stats['ram'],
+        '__STAT_DISK__':    stats['disk'],
+        '__RAM_PCT__':      str(stats['ram_pct']),
+        '__DISK_PCT__':     str(stats['disk_pct']),
+        '__LOGG_STATUS__':  logg_status,
+        '__LOG_ROWS__':     '',
+        '__KJENTE_ROWS__':  '',
+    })
+    h.send_html(page)
+
+
+# ── POST-ruter ────────────────────────────────────────────────────────────────
+
+def post_login(h, raw_body, post_params):
+    """Auth-fri: håndteres eksplisitt i do_POST før auth-sjekken."""
+    try:
+        ip  = h.client_address[0]
+        now = time.time()
+        FAILED_LOGINS[ip] = [t for t in FAILED_LOGINS.get(ip, []) if now - t < 300]
+        if len(FAILED_LOGINS[ip]) >= 5:
+            with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
+                tpl = f.read().replace('__ERROR__', '<p class="login-error">For mange forsøk — vent 5 minutter</p>')
+            h.send_html(tpl)
+            return
+        params   = parse_qs(raw_body)
+        username = params.get('username', [''])[0]
+        password = params.get('password', [''])[0]
+        auth     = load_settings().get('auth', {})
+        ok_user  = auth.get('username', 'admin')
+        stored   = auth.get('password_hash') or hash_password('olpr')
+        if secrets.compare_digest(username, ok_user) and verify_password(password, stored):
+            FAILED_LOGINS.pop(ip, None)
+            token = secrets.token_hex(32)
+            SESSIONS[token] = username
+            h.send_response(303)
+            h.send_header('Location', '/')
+            h.send_header('Set-Cookie', f'session={token}; Path=/; HttpOnly')
+            h.end_headers()
+        else:
+            FAILED_LOGINS[ip].append(now)
+            time.sleep(0.5)
+            with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
+                tpl = f.read().replace('__ERROR__', '<p class="login-error">Feil brukernavn eller passord</p>')
+            h.send_html(tpl)
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('POST', '/api/kjente')
+def post_kjente(h, raw_body, post_params):
+    try:
+        action = post_params.get('action', '')
+        plate  = post_params.get('plate', '').strip().upper()
+        name   = post_params.get('name', '').strip()
+        skilt  = load_skilt()
+        if action == 'add' and plate and name:
+            skilt[plate] = name
+            save_skilt(skilt)
+        elif action == 'edit' and plate and name:
+            skilt[plate] = name
+            save_skilt(skilt)
+        elif action == 'delete' and plate:
+            skilt.pop(plate, None)
+            save_skilt(skilt)
+        else:
+            h.send_json({'ok': False, 'error': 'Ugyldig handling'}); return
+        h.send_json({'ok': True})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('POST', '/api/restart/all')
+def post_restart_all(h, raw_body, post_params):
+    import threading as _th
+    def do_restart():
+        import time as _t, subprocess as _sp
+        _t.sleep(0.5)
+        restart_service('lpr-bridge')
+        _sp.run(['docker', 'restart', 'frigate'], timeout=60)
+        restart_service('lpr-web')
+    _th.Thread(target=do_restart, daemon=True).start()
+    h.send_json({'ok': True, 'message': 'Restarter alle tjenester...'})
+
+
+@rute('POST', '/api/cameras')
+def post_cameras(h, raw_body, post_params):
+    try:
+        cameras = json.loads(raw_body)
+        s = load_settings()
+        s['cameras'] = cameras
+        save_settings_file(s)
+        generate_frigate_config(cameras)
+        restart_service('lpr-bridge')
+        import subprocess as _sp
+        _sp.run(['docker', 'restart', 'frigate'], timeout=60)
+        h.send_json({'ok': True, 'restarted': ['lpr-bridge', 'frigate']})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('POST', '/api/network')
+def post_network(h, raw_body, post_params):
+    try:
+        data    = json.loads(raw_body)
+        ip      = data.get('ip', '').strip()
+        netmask = data.get('netmask', '255.255.255.0').strip()
+        gateway = data.get('gateway', '').strip()
+        dns     = data.get('dns', '').strip()
+        if not ip or not gateway:
+            h.send_json({'ok': False, 'error': 'IP og gateway er påkrevd'})
+            return
+        iface = 'eth0'
+        try:
+            import subprocess as _sp
+            result = _sp.run(['ip', 'route', 'show', 'default'],
+                             capture_output=True, text=True)
+            for part in result.stdout.split():
+                if part not in ('default', 'via', 'dev', 'proto', 'metric', 'onlink'):
+                    if not part[0].isdigit() or '.' not in part:
+                        iface = part
+                        break
+        except Exception:
+            pass
+        config = f"""auto lo
+iface lo inet loopback
+
+auto {iface}
+iface {iface} inet static
+    address {ip}
+    netmask {netmask}
+    gateway {gateway}
+    dns-nameservers {dns or gateway}
+"""
+        with open('/etc/network/interfaces', 'w') as f:
+            f.write(config)
+        h.send_json({'ok': True, 'new_ip': ip})
+        import threading as _th
+        def _restart():
+            import time as _t, subprocess as _sp
+            _t.sleep(1)
+            _sp.run(['systemctl', 'restart', 'networking'])
+        _th.Thread(target=_restart, daemon=True).start()
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('POST', '/api/settings')
+def post_settings(h, raw_body, post_params):
+    try:
+        data = json.loads(raw_body)
+        _existing = {}
+        try:
+            with open(SETTINGS_FILE) as _f:
+                _existing = json.load(_f)
+            if 'cameras' in _existing and 'cameras' not in data:
+                data['cameras'] = _existing['cameras']
+        except Exception:
+            pass
+        # Nytt passord hashes; tomt felt beholder eksisterende hash
+        new_auth = data.get('auth') or {}
+        pw = new_auth.pop('password', '') or ''
+        new_auth.pop('password_hash', None)  # klienten kan aldri sette hash direkte
+        if pw:
+            new_auth['password_hash'] = hash_password(pw)
+        elif _existing.get('auth', {}).get('password_hash'):
+            new_auth['password_hash'] = _existing['auth']['password_hash']
+        data['auth'] = new_auth
+        current     = load_settings()
+        lpr_changed = data.get('lpr') != current.get('lpr')
+        save_settings_file(data)
+        restarted = []
+        if lpr_changed:
+            restart_service('lpr-bridge')
+            restarted.append('lpr-bridge')
+        h.send_json({'ok': True, 'restarted': restarted})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+@rute('POST', '/api/logg/slett')
+def post_logg_slett(h, raw_body, post_params):
+    try:
+        params    = parse_qs(raw_body)
+        linje     = params.get('linje', [''])[0]
+        if linje:
+            parts = linje.strip().split(' ', maxsplit=2)
+            if len(parts) >= 3:
+                tidspunkt = f"{parts[0]} {parts[1]}"
+                plate     = parts[2].strip().split(' ')[0]
+                conn = sqlite3.connect(LOGG_DB)
+                conn.execute("DELETE FROM logg WHERE tidspunkt = ? AND plate = ?",
+                             (tidspunkt, plate))
+                conn.commit()
+                conn.close()
+        h.send_json({'ok': True})
+    except Exception as e:
+        h.send_json({'ok': False, 'error': str(e)})
+
+
+def post_skjema(h, raw_body, post_params):
+    """Fallback for POST: klassiske skjema-innsendinger (kjente biler) + redirect."""
+    try:
+        params = parse_qs(raw_body)
+        action = params.get('action', [''])[0]
+        plate  = params.get('plate', [''])[0].strip().upper()
+        name   = params.get('name',  [''])[0].strip()
+        skilt  = load_skilt()
+        if action == 'add' and plate and name:
+            skilt[plate] = name
+            save_skilt(skilt)
+        elif action == 'edit' and plate and name:
+            skilt[plate] = name
+            save_skilt(skilt)
+        elif action == 'delete' and plate:
+            skilt.pop(plate, None)
+            save_skilt(skilt)
+    except Exception:
+        pass
+
+    referer = h.headers.get('Referer', '')
+    tab = ''
+    if referer:
+        qs = parse_qs(urlparse(referer).query)
+        if qs.get('tab'):
+            tab = '?tab=' + qs['tab'][0]
+    h.send_response(303)
+    h.send_header('Location', '/' + tab)
+    h.end_headers()
+
+
+# ── HTTP-handler ──────────────────────────────────────────────────────────────
+
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
@@ -610,6 +1196,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def redirect_login(self):
+        self.send_response(303)
+        self.send_header('Location', '/login')
+        self.end_headers()
+
     def do_GET(self):
         parsed = urlparse(self.path)
 
@@ -637,318 +1228,18 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if not check_auth(self):
-            self.send_response(303)
-            self.send_header('Location', '/login')
-            self.end_headers()
+            self.redirect_login()
             return
 
-        if parsed.path == '/health':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'OK')
+        fn = GET_ROUTES.get(parsed.path)
+        if fn:
+            fn(self, parsed)
             return
-
-        if parsed.path == '/api/status':
-            self.send_json(get_system_stats())
-            return
-
-        if parsed.path == '/api/logg':
-            qs2      = parse_qs(parsed.query)
-            all_     = qs2.get('all', ['0'])[0] == '1'
-            page     = int(qs2.get('page', ['1'])[0])
-            per_page = int(qs2.get('per_page', ['20'])[0])
-            entries  = load_logg_entries(all_)
-            total    = len(entries)
-            start    = (page - 1) * per_page
-            end      = start + per_page
-            self.send_json({
-                'lines':       entries[start:end],
-                'total':       total,
-                'today_total': len(load_logg_entries(False)),
-                'page':        page,
-                'per_page':    per_page,
-                'pages':       (total + per_page - 1) // per_page,
-                'show_all':    all_,
-            })
-            return
-
-        if parsed.path == '/api/statistikk':
-            self.send_json(load_statistikk())
-            return
-
-        if parsed.path == '/api/events24h':
-            qs2  = parse_qs(parsed.query)
-            all_ = qs2.get('all', ['0'])[0] == '1'
-            self.send_json(load_events_24h(all_))
-            return
-
-        if parsed.path.startswith('/api/frigate_snapshot/'):
-            event_id = os.path.basename(parsed.path)
-            try:
-                url = f'http://localhost:5000/api/events/{event_id}/snapshot.jpg?crop=1'
-                with urllib.request.urlopen(url, timeout=5) as r:
-                    data = r.read()
-                self.send_response(200)
-                self.send_header('Content-type', 'image/jpeg')
-                self.send_header('Cache-Control', 'public, max-age=604800, immutable')
-                self.end_headers()
-                self.wfile.write(data)
-            except Exception:
-                self.send_response(404)
-                self.end_headers()
-            return
-
-        if parsed.path == '/api/kjente':
-            skilt = load_skilt()
-            data = [{'plate': p, 'name': n} for p, n in sorted(skilt.items(), key=lambda x: x[1].lower())]
-            self.send_json(data)
-            return
-
-        if parsed.path == '/api/ukjente':
-            qs2  = parse_qs(parsed.query)
-            all_ = qs2.get('all', ['0'])[0] == '1'
-            self.send_json(load_ukjente(all_))
-            return
-
-        if parsed.path == '/api/ukjente/slett':
-            qs2 = parse_qs(parsed.query)
-            uid = qs2.get('id', [None])[0]
-            if uid:
-                try:
-                    conn = sqlite3.connect(UKJENTE_DB)
-                    row  = conn.execute('SELECT snapshot FROM ukjente WHERE id=?', (uid,)).fetchone()
-                    if row and row[0]:
-                        try: os.remove(row[0])
-                        except Exception: pass
-                    conn.execute('DELETE FROM ukjente WHERE id=?', (uid,))
-                    conn.commit(); conn.close()
-                    self.send_json({'ok': True})
-                except Exception as e:
-                    self.send_json({'ok': False, 'error': str(e)})
-            else:
-                self.send_json({'ok': False})
-            return
-
-        if parsed.path.startswith('/snapshot/'):
-            filename = os.path.basename(parsed.path[10:])
-            filepath = os.path.join(UKJENTE_SNAPSHOTS, filename)
-            try:
-                with open(filepath, 'rb') as f:
-                    data = f.read()
-                self.send_response(200)
-                self.send_header('Content-type', 'image/jpeg')
-                self.send_header('Cache-Control', 'public, max-age=604800, immutable')
-                self.end_headers()
-                self.wfile.write(data)
-            except FileNotFoundError:
-                self.send_response(404)
-                self.end_headers()
-            return
-
-        if parsed.path == '/api/gpt/test':
-            try:
-                s     = load_settings()['lpr']
-                key   = s.get('openai_api_key', '')
-                model = s.get('gpt_model', 'gpt-4o')
-                if not key:
-                    self.send_json({'ok': False, 'error': 'Ingen API-nøkkel konfigurert'})
-                    return
-                import requests as _req
-                r = _req.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                    json={"model": model, "max_tokens": 5,
-                          "messages": [{"role": "user", "content": "Reply with OK"}]},
-                    timeout=10
-                )
-                if r.status_code == 200:
-                    self.send_json({'ok': True, 'model': model,
-                                    'response': r.json()['choices'][0]['message']['content'].strip()})
-                else:
-                    err = r.json().get('error', {}).get('message', f'HTTP {r.status_code}')
-                    self.send_json({'ok': False, 'error': err})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if parsed.path == '/api/camera/test':
-            qs2  = parse_qs(parsed.query)
-            ip   = qs2.get('ip', [''])[0]
-            user = qs2.get('user', [''])[0]
-            pwd  = qs2.get('pass', [''])[0]
-            path_rtsp = qs2.get('path', ['/Streaming/Channels/101'])[0]
-            if not path_rtsp.startswith('/'):
-                path_rtsp = '/' + path_rtsp
-            url = f"rtsp://{user}:{pwd}@{ip}:554{path_rtsp}"
-            try:
-                result = subprocess.run(
-                    ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', url],
-                    capture_output=True, text=True, timeout=10
-                )
-                data  = json.loads(result.stdout)
-                video = next((s for s in data.get('streams', []) if s.get('codec_type') == 'video'), None)
-                if video:
-                    fps_str = video.get('r_frame_rate', '25/1')
-                    try:
-                        num, den = map(int, fps_str.split('/'))
-                        fps = round(num / den, 1) if den else 25
-                    except Exception:
-                        fps = 25
-                    self.send_json({'ok': True, 'codec': video.get('codec_name', '?'),
-                                    'width': video.get('width', 0), 'height': video.get('height', 0), 'fps': fps})
-                else:
-                    self.send_json({'ok': False, 'error': 'Ingen videostrøm funnet'})
-            except subprocess.TimeoutExpired:
-                self.send_json({'ok': False, 'error': 'Tidsavbrutt (10s)'})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if parsed.path == '/api/network':
-            try:
-                import subprocess as _sp
-                ip      = _sp.run(['hostname', '-I'], capture_output=True, text=True).stdout.strip().split()[0]
-                gateway = _sp.run(['ip', 'route', 'show', 'default'], capture_output=True, text=True).stdout.split()[2]
-                self.send_json({'ok': True, 'ip': ip, 'netmask': '255.255.255.0', 'gateway': gateway, 'dns': gateway})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if parsed.path == '/api/cameras':
-            try:
-                with open(SETTINGS_FILE) as f:
-                    self.send_json(json.load(f).get('cameras', []))
-            except Exception:
-                self.send_json([])
-            return
-
-        if parsed.path == '/api/docs':
-            try:
-                s = load_settings()
-                with open(SETTINGS_FILE) as _f:
-                    cameras = json.load(_f).get('cameras', [])
-            except Exception:
-                cameras = []
-            services = {}
-            for svc in ['lpr-bridge', 'lpr-web']:
-                try:
-                    active = subprocess.run(['systemctl', 'is-active', svc],
-                                            capture_output=True, text=True).stdout.strip()
-                    show = subprocess.run(
-                        ['systemctl', 'show', svc, '--property=ExecStart,Description,ActiveEnterTimestamp'],
-                        capture_output=True, text=True).stdout.strip()
-                    props = {}
-                    for line in show.splitlines():
-                        k, _, v = line.partition('=')
-                        props[k] = v
-                    exec_start = ''
-                    raw = props.get('ExecStart', '')
-                    import re as _re
-                    m = _re.search(r'argv\[\]=([^;]+)', raw)
-                    if m:
-                        exec_start = m.group(1).strip()
-                    services[svc] = {
-                        'status':      active,
-                        'description': props.get('Description', ''),
-                        'exec':        exec_start,
-                        'started':     props.get('ActiveEnterTimestamp', '').replace('n/a', ''),
-                    }
-                except Exception:
-                    services[svc] = {'status': 'unknown', 'description': '', 'exec': '', 'started': ''}
-            self.send_json({
-                'system':   s.get('system', {}),
-                'lpr':      s.get('lpr', {}),
-                'web':      s.get('web', {}),
-                'cameras':  cameras,
-                'services': services,
-            })
-            return
-
-        if parsed.path == '/api/frigate_config':
-            try:
-                with urllib.request.urlopen('http://127.0.0.1:5000/api/config', timeout=5) as r:
-                    fc = json.loads(r.read())
-                result = {}
-                for name, cam in fc.get('cameras', {}).items():
-                    detect = cam.get('detect', {})
-                    objects = cam.get('objects', {}).get('track', [])
-                    inputs = cam.get('ffmpeg', {}).get('inputs', [])
-                    roles = []
-                    for inp in inputs:
-                        roles.extend(inp.get('roles', []))
-                    result[name] = {
-                        'width':   detect.get('width'),
-                        'height':  detect.get('height'),
-                        'fps':     detect.get('fps'),
-                        'objects': objects,
-                        'record':  'record' in roles,
-                        'detect':  detect.get('enabled', True),
-                    }
-                self.send_json(result)
-            except Exception:
-                self.send_json({})
-            return
-
-        if parsed.path == '/api/settings':
-            s = load_settings()
-            try:
-                with open(SETTINGS_FILE) as _f:
-                    s['cameras'] = json.load(_f).get('cameras', [])
-            except Exception:
-                s['cameras'] = []
-            # Aldri send hash/passord til klienten — tomt felt betyr «uendret»
-            s['auth'] = {'username': s.get('auth', {}).get('username', 'admin'), 'password': ''}
-            self.send_json(s)
-            return
-
-        skilt       = load_skilt()
-        stats       = get_system_stats()
-        logg_status = "Oppdateres hvert 30. sekund"
-        kjente_rows = (
-            '<tr class="add-row"><td colspan="3">'
-            '<form method="POST" class="inline" style="display:flex;gap:8px;align-items:center;">'
-            '<input type="hidden" name="action" value="add">'
-            '<input type="text" name="plate" placeholder="AB12345" required '
-            'pattern="[A-Za-z]{2}[0-9]{5}" style="text-transform:uppercase;width:110px;">'
-            '<input type="text" name="name" placeholder="Eier / kallenavn" required style="flex:1;">'
-            '<button type="submit">+ Legg til ny bil</button>'
-            '</form></td></tr>'
-        )
-        for plate, name in sorted(skilt.items(), key=lambda x: x[1].lower()):
-            ep = html.escape(plate)
-            en = html.escape(name)
-            kjente_rows += (
-                f'<tr><td><b>{ep}</b></td>'
-                f'<td><form method="POST" class="inline">'
-                f'<input type="hidden" name="action" value="edit">'
-                f'<input type="hidden" name="plate" value="{ep}">'
-                f'<input type="text" name="name" value="{en}" required>'
-                f'<button type="submit">Lagre</button>'
-                f'</form></td>'
-                f'<td><form method="POST" class="inline" '
-                f'onsubmit="return confirm(\'Slette {ep} ({en})?\');">'
-                f'<input type="hidden" name="action" value="delete">'
-                f'<input type="hidden" name="plate" value="{ep}">'
-                f'<button type="submit" class="del">Slett</button>'
-                f'</form></td></tr>'
-            )
-        page = load_template({
-            '__SYSTEM_NAME__':  load_settings()['system'].get('name', 'OLPR'),
-            '__FRIGATE_URL__':  load_settings()['system'].get('frigate_url', 'http://localhost:5000'),
-            '__PORTAINER_URL__': load_settings()['system'].get('portainer_url', 'http://localhost:9000'),
-            '__LOGG_LABEL__':   'Logg',
-            '__SKILT_COUNT__':  str(len(skilt)),
-            '__STAT_LOAD__':    stats['load'],
-            '__STAT_RAM__':     stats['ram'],
-            '__STAT_DISK__':    stats['disk'],
-            '__RAM_PCT__':      str(stats['ram_pct']),
-            '__DISK_PCT__':     str(stats['disk_pct']),
-            '__LOGG_STATUS__':  logg_status,
-            '__LOG_ROWS__':     '',
-            '__KJENTE_ROWS__':  '',
-        })
-        self.send_html(page)
+        for prefix, pfn in GET_PREFIX_ROUTES:
+            if parsed.path.startswith(prefix):
+                pfn(self, parsed)
+                return
+        get_index(self, parsed)
 
     def do_POST(self):
         length   = int(self.headers.get('Content-Length', 0))
@@ -959,216 +1250,18 @@ class Handler(BaseHTTPRequestHandler):
             post_params = {}
 
         if self.path == '/login':
-            try:
-                ip  = self.client_address[0]
-                now = time.time()
-                FAILED_LOGINS[ip] = [t for t in FAILED_LOGINS.get(ip, []) if now - t < 300]
-                if len(FAILED_LOGINS[ip]) >= 5:
-                    with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
-                        tpl = f.read().replace('__ERROR__', '<p class="login-error">For mange forsøk — vent 5 minutter</p>')
-                    self.send_html(tpl)
-                    return
-                params   = parse_qs(raw_body)
-                username = params.get('username', [''])[0]
-                password = params.get('password', [''])[0]
-                auth     = load_settings().get('auth', {})
-                ok_user  = auth.get('username', 'admin')
-                stored   = auth.get('password_hash') or hash_password('olpr')
-                if secrets.compare_digest(username, ok_user) and verify_password(password, stored):
-                    FAILED_LOGINS.pop(ip, None)
-                    token = secrets.token_hex(32)
-                    SESSIONS[token] = username
-                    self.send_response(303)
-                    self.send_header('Location', '/')
-                    self.send_header('Set-Cookie', f'session={token}; Path=/; HttpOnly')
-                    self.end_headers()
-                else:
-                    FAILED_LOGINS[ip].append(now)
-                    time.sleep(0.5)
-                    with open(LOGIN_TEMPLATE, encoding='utf-8') as f:
-                        tpl = f.read().replace('__ERROR__', '<p class="login-error">Feil brukernavn eller passord</p>')
-                    self.send_html(tpl)
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
+            post_login(self, raw_body, post_params)
             return
 
         if not check_auth(self):
-            self.send_response(303)
-            self.send_header('Location', '/login')
-            self.end_headers()
+            self.redirect_login()
             return
 
-        if self.path == '/api/kjente':
-            try:
-                action = post_params.get('action', '')
-                plate  = post_params.get('plate', '').strip().upper()
-                name   = post_params.get('name', '').strip()
-                skilt  = load_skilt()
-                if action == 'add' and plate and name:
-                    skilt[plate] = name
-                    save_skilt(skilt)
-                elif action == 'edit' and plate and name:
-                    skilt[plate] = name
-                    save_skilt(skilt)
-                elif action == 'delete' and plate:
-                    skilt.pop(plate, None)
-                    save_skilt(skilt)
-                else:
-                    self.send_json({'ok': False, 'error': 'Ugyldig handling'}); return
-                self.send_json({'ok': True})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
+        fn = POST_ROUTES.get(self.path)
+        if fn:
+            fn(self, raw_body, post_params)
             return
-
-        if self.path == '/api/restart/all':
-            import threading as _th
-            def do_restart():
-                import time as _t, subprocess as _sp
-                _t.sleep(0.5)
-                restart_service('lpr-bridge')
-                _sp.run(['docker', 'restart', 'frigate'], timeout=60)
-                restart_service('lpr-web')
-            _th.Thread(target=do_restart, daemon=True).start()
-            self.send_json({'ok': True, 'message': 'Restarter alle tjenester...'})
-            return
-
-        if self.path == '/api/cameras':
-            try:
-                cameras = json.loads(raw_body)
-                s = load_settings()
-                s['cameras'] = cameras
-                save_settings_file(s)
-                generate_frigate_config(cameras)
-                restart_service('lpr-bridge')
-                import subprocess as _sp
-                _sp.run(['docker', 'restart', 'frigate'], timeout=60)
-                self.send_json({'ok': True, 'restarted': ['lpr-bridge', 'frigate']})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-        if self.path == '/api/network':
-            try:
-                data    = json.loads(raw_body)
-                ip      = data.get('ip', '').strip()
-                netmask = data.get('netmask', '255.255.255.0').strip()
-                gateway = data.get('gateway', '').strip()
-                dns     = data.get('dns', '').strip()
-                if not ip or not gateway:
-                    self.send_json({'ok': False, 'error': 'IP og gateway er påkrevd'})
-                    return
-                iface = 'eth0'
-                try:
-                    import subprocess as _sp
-                    result = _sp.run(['ip', 'route', 'show', 'default'],
-                                     capture_output=True, text=True)
-                    for part in result.stdout.split():
-                        if part not in ('default', 'via', 'dev', 'proto', 'metric', 'onlink'):
-                            if not part[0].isdigit() or '.' not in part:
-                                iface = part
-                                break
-                except Exception:
-                    pass
-                config = f"""auto lo
-iface lo inet loopback
-
-auto {iface}
-iface {iface} inet static
-    address {ip}
-    netmask {netmask}
-    gateway {gateway}
-    dns-nameservers {dns or gateway}
-"""
-                with open('/etc/network/interfaces', 'w') as f:
-                    f.write(config)
-                self.send_json({'ok': True, 'new_ip': ip})
-                import threading as _th
-                def _restart():
-                    import time as _t, subprocess as _sp
-                    _t.sleep(1)
-                    _sp.run(['systemctl', 'restart', 'networking'])
-                _th.Thread(target=_restart, daemon=True).start()
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if self.path == '/api/settings':
-            try:
-                data = json.loads(raw_body)
-                _existing = {}
-                try:
-                    with open(SETTINGS_FILE) as _f:
-                        _existing = json.load(_f)
-                    if 'cameras' in _existing and 'cameras' not in data:
-                        data['cameras'] = _existing['cameras']
-                except Exception:
-                    pass
-                # Nytt passord hashes; tomt felt beholder eksisterende hash
-                new_auth = data.get('auth') or {}
-                pw = new_auth.pop('password', '') or ''
-                new_auth.pop('password_hash', None)  # klienten kan aldri sette hash direkte
-                if pw:
-                    new_auth['password_hash'] = hash_password(pw)
-                elif _existing.get('auth', {}).get('password_hash'):
-                    new_auth['password_hash'] = _existing['auth']['password_hash']
-                data['auth'] = new_auth
-                current     = load_settings()
-                lpr_changed = data.get('lpr') != current.get('lpr')
-                save_settings_file(data)
-                restarted = []
-                if lpr_changed:
-                    restart_service('lpr-bridge')
-                    restarted.append('lpr-bridge')
-                self.send_json({'ok': True, 'restarted': restarted})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        if self.path == '/api/logg/slett':
-            try:
-                params    = parse_qs(raw_body)
-                linje     = params.get('linje', [''])[0]
-                if linje:
-                    parts = linje.strip().split(' ', maxsplit=2)
-                    if len(parts) >= 3:
-                        tidspunkt = f"{parts[0]} {parts[1]}"
-                        plate     = parts[2].strip().split(' ')[0]
-                        conn = sqlite3.connect(LOGG_DB)
-                        conn.execute("DELETE FROM logg WHERE tidspunkt = ? AND plate = ?",
-                                     (tidspunkt, plate))
-                        conn.commit()
-                        conn.close()
-                self.send_json({'ok': True})
-            except Exception as e:
-                self.send_json({'ok': False, 'error': str(e)})
-            return
-
-        try:
-            params = parse_qs(raw_body)
-            action = params.get('action', [''])[0]
-            plate  = params.get('plate', [''])[0].strip().upper()
-            name   = params.get('name',  [''])[0].strip()
-            skilt  = load_skilt()
-            if action == 'add' and plate and name:
-                skilt[plate] = name
-                save_skilt(skilt)
-            elif action == 'edit' and plate and name:
-                skilt[plate] = name
-                save_skilt(skilt)
-            elif action == 'delete' and plate:
-                skilt.pop(plate, None)
-                save_skilt(skilt)
-        except Exception:
-            pass
-
-        referer = self.headers.get('Referer', '')
-        tab = ''
-        if referer:
-            qs = parse_qs(urlparse(referer).query)
-            if qs.get('tab'):
-                tab = '?tab=' + qs['tab'][0]
-        self.send_response(303)
-        self.send_header('Location', '/' + tab)
-        self.end_headers()
+        post_skjema(self, raw_body, post_params)
 
 
 migrate_auth()
