@@ -544,7 +544,7 @@ def main():
     prune_snapshots()
     threading.Thread(target=prune_snapshots_worker, daemon=True).start()
     try:
-        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, client_id="olpr_bridge")
+        client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="olpr_bridge")
     except AttributeError:
         client = mqtt.Client(client_id="olpr_bridge")
     client.on_connect = on_connect
