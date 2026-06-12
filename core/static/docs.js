@@ -191,6 +191,20 @@ function renderDocs(d) {
       <table><thead><tr><th>Metode</th><th>Endepunkt</th><th>Beskrivelse</th></tr></thead>
       <tbody>${apiHtml}</tbody></table>
     </div>`;
+
+  // Arkitekturdiagram — vises øverst hvis /static/arkitektur.svg finnes i prosjektet
+  fetch('/static/arkitektur.svg').then(r => {
+    if (!r.ok) return;
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.marginBottom = '16px';
+    card.innerHTML = `
+      <h2>🗺️ Arkitektur</h2>
+      <a href="/static/arkitektur.svg" target="_blank" title="Åpne i full størrelse">
+        <img src="/static/arkitektur.svg" alt="Systemoversikt" style="width:100%;border-radius:10px;display:block">
+      </a>`;
+    el.prepend(card);
+  }).catch(() => {});
 }
 
 function restartAlt() {
