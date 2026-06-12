@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1680 1010" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace">
+<defs>
+  <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#e9fbff"/><stop offset="1" stop-color="#5eead4"/>
+  </linearGradient>
+  <radialGradient id="bgglow" cx="0.35" cy="0.1" r="0.9">
+    <stop offset="0" stop-color="#22d3ee" stop-opacity="0.09"/>
+    <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="boxfill" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#10202c"/><stop offset="1" stop-color="#0b141d"/>
+  </linearGradient>
+  <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+    <path d="M0 1 L9 5 L0 9 Z" fill="context-stroke"/>
+  </marker>
+</defs>
+<rect width="1680" height="1010" fill="#060b11"/>
+<rect width="1680" height="1010" fill="url(#bgglow)"/>
+<text x="60" y="92" font-size="38" font-weight="bold" fill="url(#title)">OLPR — systemoversikt</text>
+<text x="60" y="128" font-size="15" fill="#5e7991">Automatisk skiltgjenkjenning · Frigate · Docker · Coral/CPU · offline-klar · én-kommandos installasjon</text>
+<rect x="40" y="165" width="320" height="612" rx="18" fill="#0b141d" fill-opacity="0.45" stroke="#6ec8eb" stroke-opacity="0.14"/>
+<text x="62" y="199" font-size="13" letter-spacing="2.5" fill="#5e7991" font-weight="bold">INNDATA</text>
+<rect x="440" y="165" width="790" height="760" rx="18" fill="#0b141d" fill-opacity="0.45" stroke="#6ec8eb" stroke-opacity="0.14"/>
+<text x="462" y="199" font-size="13" letter-spacing="2.5" fill="#5e7991" font-weight="bold">KJERNE — DOCKER + SYSTEMD</text>
+<rect x="1300" y="165" width="350" height="560" rx="18" fill="#0b141d" fill-opacity="0.45" stroke="#6ec8eb" stroke-opacity="0.14"/>
+<text x="1322" y="199" font-size="13" letter-spacing="2.5" fill="#5e7991" font-weight="bold">UT · SKY · LAGRING</text>
+<path d="M 340 261 C 405 261, 405 265, 470 265" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 340 691 C 405 691, 405 715, 470 715" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 620 315 C 620 315, 620 450, 620 450" fill="none" stroke="#22d3ee" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 770 265 C 825 265, 825 320, 880 320" fill="none" stroke="#22d3ee" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)" stroke-dasharray="7 6"/>
+<path d="M 770 476 C 825 476, 825 372, 880 372" fill="none" stroke="#22d3ee" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 1200 322 C 1265 322, 1265 265, 1330 265" fill="none" stroke="#34d399" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 1200 354 C 1265 354, 1265 489, 1330 489" fill="none" stroke="#fbbf24" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)" stroke-dasharray="7 6"/>
+<path d="M 1200 378 C 1265 378, 1265 614, 1330 614" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<path d="M 1330 658 C 1050 658, 1050 700, 770 700" fill="none" stroke="#5eead4" stroke-width="2.4" stroke-opacity="0.75" marker-end="url(#ah)"/>
+<g>
+<rect x="60" y="215" width="280" height="92" rx="13" fill="url(#boxfill)" stroke="#5eead4" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="80" y="245" font-size="18" font-weight="bold" fill="#dfe9f2">Kameraer</text>
+<text x="80" y="267" font-size="12.5" fill="#9db4c6">RTSP · H.264 · VAAPI</text>
+<text x="80" y="284" font-size="12.5" fill="#9db4c6">sub/main detect-stream</text>
+</g>
+<g>
+<rect x="60" y="645" width="280" height="92" rx="13" fill="url(#boxfill)" stroke="#5eead4" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="80" y="675" font-size="18" font-weight="bold" fill="#dfe9f2">Klienter</text>
+<text x="80" y="697" font-size="12.5" fill="#9db4c6">nettleser · LAN</text>
+<text x="80" y="714" font-size="12.5" fill="#9db4c6">session-login (PBKDF2)</text>
+</g>
+<g style="filter: drop-shadow(0 0 14px #22d3ee55)">
+<rect x="470" y="215" width="300" height="100" rx="13" fill="url(#boxfill)" stroke="#22d3ee" stroke-opacity="0.85" stroke-width="2.4"/>
+<text x="490" y="245" font-size="18" font-weight="bold" fill="#dfe9f2">Frigate NVR</text>
+<text x="490" y="267" font-size="12.5" fill="#9db4c6">LPR + AI · Coral/CPU</text>
+<text x="490" y="284" font-size="12.5" fill="#9db4c6">config autogenerert fra dashboard</text>
+</g>
+<g style="filter: drop-shadow(0 0 14px #22d3ee55)">
+<rect x="470" y="450" width="300" height="92" rx="13" fill="url(#boxfill)" stroke="#22d3ee" stroke-opacity="0.85" stroke-width="2.4"/>
+<text x="490" y="488" font-size="18" font-weight="bold" fill="#dfe9f2">Mosquitto</text>
+<text x="490" y="510" font-size="12.5" fill="#9db4c6">MQTT-broker · Docker</text>
+</g>
+<g style="filter: drop-shadow(0 0 14px #5eead455)">
+<rect x="470" y="645" width="300" height="100" rx="13" fill="url(#boxfill)" stroke="#5eead4" stroke-opacity="0.85" stroke-width="2.4"/>
+<text x="490" y="675" font-size="18" font-weight="bold" fill="#dfe9f2">lpr_web</text>
+<text x="490" y="697" font-size="12.5" fill="#9db4c6">Dashboard :8080</text>
+<text x="490" y="714" font-size="12.5" fill="#9db4c6">auth · logg · statistikk · kameraoppsett</text>
+</g>
+<g>
+<rect x="470" y="815" width="300" height="70" rx="13" fill="url(#boxfill)" stroke="#5e7991" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="490" y="853" font-size="18" font-weight="bold" fill="#dfe9f2">install.sh</text>
+<text x="490" y="875" font-size="12.5" fill="#9db4c6">én kommando på ren Debian 13</text>
+</g>
+<g>
+<rect x="880" y="300" width="320" height="92" rx="13" fill="url(#boxfill)" stroke="#22d3ee" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="900" y="330" font-size="18" font-weight="bold" fill="#dfe9f2">lpr_bridge</text>
+<text x="900" y="352" font-size="12.5" fill="#9db4c6">LPR-events → MQTT</text>
+<text x="900" y="369" font-size="12.5" fill="#9db4c6">GPT-4o-fallback ved lav konfidens</text>
+</g>
+<g>
+<rect x="1330" y="215" width="290" height="100" rx="13" fill="url(#boxfill)" stroke="#34d399" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="1350" y="245" font-size="18" font-weight="bold" fill="#dfe9f2">Kundesystem</text>
+<text x="1350" y="267" font-size="12.5" fill="#9db4c6">bom · port · parkering</text>
+<text x="1350" y="284" font-size="12.5" fill="#9db4c6">abonnerer på MQTT-topics</text>
+</g>
+<g>
+<rect x="1330" y="450" width="290" height="78" rx="13" fill="url(#boxfill)" stroke="#fbbf24" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="1350" y="488" font-size="18" font-weight="bold" fill="#dfe9f2">GPT-4o (OpenAI)</text>
+<text x="1350" y="510" font-size="12.5" fill="#9db4c6">skiltverifisering · valgfritt</text>
+</g>
+<g>
+<rect x="1330" y="590" width="290" height="92" rx="13" fill="url(#boxfill)" stroke="#5eead4" stroke-opacity="0.85" stroke-width="1.6"/>
+<text x="1350" y="620" font-size="18" font-weight="bold" fill="#dfe9f2">SQLite + snapshots</text>
+<text x="1350" y="642" font-size="12.5" fill="#9db4c6">logg.db · ukjente.db</text>
+<text x="1350" y="659" font-size="12.5" fill="#9db4c6">snapshots · Frigate-opptak</text>
+</g>
+<text x="60" y="970" font-size="13" fill="#5e7991">MQTT-topics: {system}/{kamera}/resultat · {system}/{kamera}/skilt — dokumentasjon: docs/olpr.md</text>
+</svg>
