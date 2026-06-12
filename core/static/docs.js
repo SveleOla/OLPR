@@ -192,19 +192,32 @@ function renderDocs(d) {
       <tbody>${apiHtml}</tbody></table>
     </div>`;
 
-  // Arkitekturdiagram — vises øverst hvis /static/arkitektur.svg finnes i prosjektet
+  // Arkitekturdiagram — vises øverst hvis /static/arkitektur.svg finnes i prosjektet.
+  // Minimert som default; maksimering skjer inline, klikk på bildet gir lightbox.
   fetch('/static/arkitektur.svg').then(r => {
     if (!r.ok) return;
     const card = document.createElement('div');
     card.className = 'card';
     card.style.marginBottom = '16px';
     card.innerHTML = `
-      <h2>🗺️ Arkitektur</h2>
-      <a href="/static/arkitektur.svg" target="_blank" title="Åpne i full størrelse">
-        <img src="/static/arkitektur.svg" alt="Systemoversikt" style="width:100%;border-radius:10px;display:block">
-      </a>`;
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="margin-bottom:0">🗺️ Arkitektur</h2>
+        <button onclick="toggleArkitektur(this)">⛶ Vis diagram</button>
+      </div>
+      <div id="arkitektur-wrap" class="hidden" style="margin-top:16px">
+        <img src="/static/arkitektur.svg" alt="Systemoversikt" title="Klikk for fullskjerm"
+             style="width:100%;border-radius:10px;display:block;cursor:zoom-in"
+             onclick="openLightbox('/static/arkitektur.svg')">
+      </div>`;
     el.prepend(card);
   }).catch(() => {});
+}
+
+function toggleArkitektur(btn) {
+  const wrap = document.getElementById('arkitektur-wrap');
+  if (!wrap) return;
+  const skjult = wrap.classList.toggle('hidden');
+  btn.textContent = skjult ? '⛶ Vis diagram' : '⛶ Skjul diagram';
 }
 
 function restartAlt() {
