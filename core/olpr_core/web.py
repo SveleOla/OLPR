@@ -839,8 +839,12 @@ def get_settings(h, parsed):
             s['cameras'] = json.load(_f).get('cameras', [])
     except Exception:
         s['cameras'] = []
-    # Aldri send hash/passord til klienten — tomt felt betyr «uendret»
-    s['auth'] = {'username': s.get('auth', {}).get('username', 'admin'), 'password': ''}
+    # Aldri send hash/passord til klienten — tomt felt betyr «uendret».
+    # enabled reflekterer effektiv tilstand: eksplisitt innstilling, ellers run(auth=)-default,
+    # så «Krev innlogging»-toggle viser riktig av/på.
+    _a = s.get('auth', {})
+    s['auth'] = {'username': _a.get('username', 'admin'), 'password': '',
+                 'enabled': _a.get('enabled', AUTH_ENABLED)}
     h.send_json(s)
 
 
@@ -1051,6 +1055,11 @@ def post_settings(h, raw_body, post_params):
         elif _existing.get('auth', {}).get('password_hash'):
             new_auth['password_hash'] = _existing['auth']['password_hash']
         data['auth'] = new_auth
+        # Utelåsings-vern: ikke aktiver innlogging uten et satt passord
+        if new_auth.get('enabled') and not new_auth.get('password_hash'):
+            h.send_json({'ok': False,
+                         'error': 'Sett brukernavn og passord før du aktiverer innlogging (ellers blir du utelåst).'})
+            return
         current     = load_settings()
         lpr_changed = data.get('lpr') != current.get('lpr')
         save_settings_file(data)

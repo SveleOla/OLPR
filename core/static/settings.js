@@ -3,10 +3,12 @@ const SETTINGS_SCHEMA = [
     key: 'auth', label: 'Innlogging', icon: '🔒',
     restart: null, restartLabel: 'Lagre',
     fields: [
+      { key: 'enabled', label: 'Krev innlogging', type: 'boolean',
+        tip: 'Av/på for pålogging på dashboardet. Sett brukernavn + passord FØR du slår på — ellers blir du utelåst. Trer i kraft umiddelbart.' },
       { key: 'username', label: 'Brukernavn', type: 'text',
         tip: 'Brukernavn for innlogging på dashboardet.' },
       { key: 'password', label: 'Passord', type: 'password',
-        tip: 'Passord for innlogging på dashboardet.' },
+        tip: 'Nytt passord (PBKDF2-hashes ved lagring). La stå tomt for å beholde eksisterende.' },
     ]
   },
   {
@@ -167,6 +169,10 @@ function saveSection(sectionKey) {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(newSettings)
   }).then(r => r.json()).then(d => {
+    if (d.ok === false) {
+      if (statusEl) statusEl.textContent = '❌ ' + (d.error || 'Feil');
+      return;  // lagring avvist (f.eks. utelåsings-vern) — ikke oppdater currentSettings
+    }
     currentSettings = newSettings;
     if (statusEl) {
       const r = d.restarted && d.restarted.length ? ` (${d.restarted.join(', ')} restartet)` : '';
