@@ -75,12 +75,26 @@ function updateStatistikk() {
       window._alleData = d.vehicle_stats;
       window._alleSort = {col: 'count', asc: false};
       renderAlle();
+      if (window.LPR_CONFIG?.hjemmebiler) renderHjemme(d.hjemme_stats);
     })
     .catch(() => {});
 }
 
 
-
+function renderHjemme(stats) {
+  const el = document.getElementById('stat-hjemme-body');
+  if (!el) return;
+  if (!stats || !stats.length) {
+    el.innerHTML = '<tr><td colspan="5" style="color:#666">Ingen data</td></tr>';
+    return;
+  }
+  el.innerHTML = stats.map(v =>
+    `<tr><td><b>${esc(v.plate)}</b></td><td>${esc(v.navn)}</td>
+     <td>${v.count}</td>
+     <td>${v.avg_days ? 'hver ' + v.avg_days + ' dag' : '–'}</td>
+     <td>${(v.top_hours||[]).map(h=>h+':00').join(' / ')||'–'}</td></tr>`
+  ).join('');
+}
 
 function renderAlle() {
   const data = [...(window._alleData || [])];

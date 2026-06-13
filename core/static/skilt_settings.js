@@ -63,6 +63,13 @@ function loadSkiltSettings() {
   }).catch(() => {});
 }
 
+// MQTT-topic-prefiks fra prosjektets LPR_CONFIG. '{system}' løses til systemnavnet
+// (OLPR), mens homeserver bruker et fast prefiks ('loxone').
+function mqttTopic(camName) {
+  const prefix = (window.LPR_CONFIG?.topicPrefix || '{system}').replace('{system}', systemName);
+  return `${prefix}/${camName}/resultat`;
+}
+
 function renderFieldInput(key, field, val) {
   const id = `lpr-${key}`;
   if (field.type === 'boolean')
@@ -142,8 +149,8 @@ function renderCameras() {
       </div>
       ${cam.lpr ? `<div class="cam-mqtt">
         <span class="cam-mqtt-label">MQTT</span>
-        <code class="cam-mqtt-topic">${systemName}/${cam.name}/resultat</code>
-        <button class="cam-copy-btn" onclick="copyTopic('${systemName}/${cam.name}/resultat', this)" title="Kopier">📋</button>
+        <code class="cam-mqtt-topic">${mqttTopic(cam.name)}</code>
+        <button class="cam-copy-btn" onclick="copyTopic('${mqttTopic(cam.name)}', this)" title="Kopier">📋</button>
       </div>` : ''}
       <div class="camera-actions">
         <button onclick="testCamera(${i})">Test</button>

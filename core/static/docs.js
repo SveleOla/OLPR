@@ -19,7 +19,7 @@ const API_ENDPOINTS = [
   { method: 'GET',  path: '/api/ukjente/slett',         desc: 'Slett ukjent kjøretøy (?id=)' },
   { method: 'GET',  path: '/api/events24h',             desc: 'Alle bil-events siste 24 timer' },
   { method: 'GET',  path: '/api/statistikk',            desc: 'Besøksstatistikk' },
-
+  ...(window.LPR_CONFIG?.extraEndpoints || []),
   { method: 'GET',  path: '/api/frigate_snapshot/:id',  desc: 'Proxy Frigate snapshot' },
   { method: 'GET',  path: '/snapshot/:filnavn',         desc: 'Server lokalt snapshot' },
   { method: 'GET',  path: '/api/docs',                  desc: 'Denne dokumentasjonen' },
@@ -30,7 +30,7 @@ const PIPELINE_STEPS = [
   { icon: '📸', title: 'Snapshot',             desc: 'go2rtc-frame captures 1 sekund etter deteksjon mens bilen er godt synlig.' },
   { icon: '🔢', title: 'Stemme-innsamling',   desc: 'Frigate sender LPR-lesinger via MQTT. Stemmer samles i 1.5 sekunder.' },
   { icon: '🏆', title: 'Vinner velges',        desc: '≥80% konfidens → Frigate-lesing brukes direkte. <80% → GPT-4o verifiserer.' },
-  { icon: '📡', title: 'MQTT publisering',     desc: 'Skilt og eier publiseres til konfigurerbart MQTT-topic (QoS 1, retain). Blankes etter reset_seconds.' },
+  { icon: '📡', title: 'MQTT publisering',     desc: `Skilt og eier publiseres til ${window.LPR_CONFIG?.topicPrefix || '{system}'}/{kamera}/resultat (QoS 1, retain). Blankes etter reset-tid.` },
   { icon: '🗄️', title: 'Database',            desc: 'Ukjente biler lagres med snapshot, kilde og frigate_plate for sporbarhet.' },
 ];
 
@@ -50,6 +50,8 @@ function renderDocs(d) {
   const cameras = d.cameras || [];
   const services = d.services || {};
   const lprCams = cameras.filter(c => c.lpr);
+  const topicPrefix = (window.LPR_CONFIG?.topicPrefix || '{system}')
+    .replace('{system}', (sys.name || 'olpr').toLowerCase().replace(/ /g, '-'));
 
   // Hent Frigate-config og flett inn faktisk oppløsning/fps/objekter
   fetch('/api/frigate_config').then(r => r.json()).then(fc => {
@@ -86,9 +88,9 @@ function renderDocs(d) {
     ? lprCams.map(c => `<tr>
         <td><b>${c.display_name || c.name}</b></td>
         <td>${c.ip}</td>
-        <td><code style="color:var(--green)">loxone/${c.name}/resultat</code>
-          <button class="cam-copy-btn" onclick="copyTopic('loxone/${c.name}/resultat', this)">📋</button></td>
-        <td><code style="color:var(--accent-2)">loxone/${c.name}/skilt</code></td>
+        <td><code style="color:var(--green)">${topicPrefix}/${c.name}/resultat</code>
+          <button class="cam-copy-btn" onclick="copyTopic('${topicPrefix}/${c.name}/resultat', this)">📋</button></td>
+        <td><code style="color:var(--accent-2)">${topicPrefix}/${c.name}/skilt</code></td>
       </tr>`).join('')
     : '<tr><td colspan="4" style="color:var(--muted)">Ingen LPR-kameraer aktivert</td></tr>';
 
