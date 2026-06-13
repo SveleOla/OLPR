@@ -308,9 +308,27 @@ def gpt_fallback(client, event_id, camera, frigate_plate=None):
 
 # ── Hjelpefunksjoner ──────────────────────────────────────────────────────────
 
+# ── Utvidelsespunkter (homeserver: TTS + dørlås-ulås, retain-på-reset) ─────────
+RESET_RETAIN = False   # homeserver setter True (Loxone leser retained blanking)
+COMMIT_HOOKS = []      # kalt etter publisering i _behandle_plate: (client, plate, navn, camera)
+
+
+def register_commit_hook(fn):
+    """Utvidelsespunkt: kjøres etter at en bekreftet plate er publisert."""
+    COMMIT_HOOKS.append(fn)
+
+
+def _run_commit_hooks(client, plate, navn, camera):
+    for hook in COMMIT_HOOKS:
+        try:
+            hook(client, plate, navn, camera)
+        except Exception as e:
+            log.warning(f"commit-hook feilet: {e}")
+
+
 def schedule_reset(client, camera):
     def reset():
-        client.publish(_get_mqtt_topic('result_topic', camera), "", qos=0, retain=False)
+        client.publish(_get_mqtt_topic('result_topic', camera), "", qos=0, retain=RESET_RETAIN)
         log.info(f"Resultat-topic blanket ({camera})")
     t = threading.Timer(RESET_SECONDS, reset)
     t.daemon = True
@@ -328,6 +346,7 @@ def _behandle_plate(client, plate, eid, camera, snap_eid=None):
     client.publish(_get_mqtt_topic('plate_topic', camera), plate, retain=True)
     client.publish(_get_mqtt_topic('result_topic', camera), navn, qos=1, retain=True)
     schedule_reset(client, camera)
+    _run_commit_hooks(client, plate, navn, camera)
 
     if camera_gpt_verify(camera):
         def _gpt_verify(event_id=eid, cam=camera, frigate_plate=plate):
