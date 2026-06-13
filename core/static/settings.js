@@ -4,7 +4,7 @@ const SETTINGS_SCHEMA = [
     restart: null, restartLabel: 'Lagre',
     fields: [
       { key: 'enabled', label: 'Krev innlogging', type: 'boolean',
-        tip: 'Av/på for pålogging på dashboardet. Sett brukernavn + passord FØR du slår på — ellers blir du utelåst. Trer i kraft umiddelbart.' },
+        tip: 'Av/på for pålogging på dashboardet. Kan ikke slås på uten at passord er satt (blokkeres) — så du kan ikke låse deg ute. Trer i kraft umiddelbart.' },
       { key: 'username', label: 'Brukernavn', type: 'text',
         tip: 'Brukernavn for innlogging på dashboardet.' },
       { key: 'password', label: 'Passord', type: 'password',
