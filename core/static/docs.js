@@ -194,29 +194,34 @@ function renderDocs(d) {
       <tbody>${apiHtml}</tbody></table>
     </div>`;
 
-  // Arkitekturdiagram — vises øverst hvis /static/arkitektur.svg finnes i prosjektet.
-  // Minimert som default; maksimering skjer inline, klikk på bildet gir lightbox.
-  fetch('/static/arkitektur.svg').then(r => {
-    if (!r.ok) return;
-    const card = document.createElement('div');
-    card.className = 'card';
-    card.style.marginBottom = '16px';
-    card.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <h2 style="margin-bottom:0">🗺️ Arkitektur</h2>
-        <button onclick="toggleArkitektur(this)">⛶ Vis diagram</button>
-      </div>
-      <div id="arkitektur-wrap" class="hidden" style="margin-top:16px">
-        <img src="/static/arkitektur.svg" alt="Systemoversikt" title="Klikk for fullskjerm"
-             style="width:100%;border-radius:10px;display:block;cursor:zoom-in"
-             onclick="openLightbox('/static/arkitektur.svg')">
-      </div>`;
-    el.prepend(card);
-  }).catch(() => {});
+  // Diagrammer — vises øverst hvis SVG-en finnes i prosjektet (ellers hoppes den over).
+  // Minimert som default; maksimering inline, klikk på bildet gir lightbox.
+  function addDiagram(svgPath, title) {
+    fetch(svgPath).then(r => {
+      if (!r.ok) return;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.marginBottom = '16px';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <h2 style="margin-bottom:0">${title}</h2>
+          <button onclick="toggleDiagram(this)">⛶ Vis diagram</button>
+        </div>
+        <div class="diagram-wrap hidden" style="margin-top:16px">
+          <img src="${svgPath}" alt="${title}" title="Klikk for fullskjerm"
+               style="width:100%;border-radius:10px;display:block;cursor:zoom-in"
+               onclick="openLightbox('${svgPath}')">
+        </div>`;
+      el.prepend(card);
+    }).catch(() => {});
+  }
+  // Prepend-rekkefølge: systemoversikt først, så felles-kjerne (havner øverst).
+  addDiagram('/static/arkitektur.svg', '🗺️ Systemoversikt');
+  addDiagram('/static/felles-kjerne.svg', '🧩 Felles kjerne (OLPR + homeserver)');
 }
 
-function toggleArkitektur(btn) {
-  const wrap = document.getElementById('arkitektur-wrap');
+function toggleDiagram(btn) {
+  const wrap = btn.closest('.card').querySelector('.diagram-wrap');
   if (!wrap) return;
   const skjult = wrap.classList.toggle('hidden');
   btn.textContent = skjult ? '⛶ Vis diagram' : '⛶ Skjul diagram';
