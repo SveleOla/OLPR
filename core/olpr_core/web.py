@@ -31,8 +31,21 @@ FAILED_LOGINS = {}   # ip -> [tidspunkt for feilede forsøk]
 AUTH_ENABLED = True  # settes av run(auth=...); False = ingen innlogging (homeserver bak Tailscale)
 
 
+def _auth_enforced():
+    """Innlogging kreves hvis settings.auth.enabled er eksplisitt satt; ellers
+    fall tilbake til run(auth=)-parameteren. Lar et prosjekt skru innlogging av/på
+    fra dashboardet (knapp) uten restart, mens tilstanden er per-prosjekt."""
+    try:
+        a = load_settings().get('auth', {})
+        if 'enabled' in a:
+            return bool(a['enabled'])
+    except Exception:
+        pass
+    return AUTH_ENABLED
+
+
 def check_auth(handler):
-    if not AUTH_ENABLED:
+    if not _auth_enforced():
         return True
     cookie = handler.headers.get('Cookie', '')
     for part in cookie.split(';'):
